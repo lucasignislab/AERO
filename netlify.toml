@@ -1,0 +1,11 @@
+[build]
+  # Força a raiz como base
+  base = "."
+  publish = "dist"
+  # O comando instala, ignora avisos estritos (CI=false) e constrói
+  command = "CI=false npm install && npm run build"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
