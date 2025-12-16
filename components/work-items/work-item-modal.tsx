@@ -24,20 +24,20 @@ import {
     ArrowDown,
     Minus,
     Circle,
+    Loader2,
 } from "lucide-react";
+
+interface IssueState {
+    id: string;
+    name: string;
+    color: string;
+}
 
 interface WorkItemModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    projectId?: string;
-    onSave?: (data: WorkItemFormData) => void;
-}
-
-interface WorkItemFormData {
-    title: string;
-    description: string;
-    priority: "urgent" | "high" | "medium" | "low" | "none";
-    stateId?: string;
+    onSubmit?: (data: { title: string; description?: string; priority?: string; state_id?: string }) => Promise<void>;
+    states?: IssueState[];
 }
 
 const priorities = [
@@ -51,25 +51,36 @@ const priorities = [
 export function WorkItemModal({
     open,
     onOpenChange,
-    onSave,
+    onSubmit,
+    states = [],
 }: WorkItemModalProps) {
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
-    const [priority, setPriority] = useState<WorkItemFormData["priority"]>("none");
+    const [priority, setPriority] = useState<"urgent" | "high" | "medium" | "low" | "none">("none");
+    const [stateId, setStateId] = useState<string>(states[0]?.id || "");
     const [loading, setLoading] = useState(false);
 
     const selectedPriority = priorities.find((p) => p.value === priority)!;
+    const selectedState = states.find((s) => s.id === stateId) || states[0];
 
     const handleSubmit = async () => {
         if (!title.trim()) return;
 
         setLoading(true);
         try {
-            onSave?.({ title, description, priority });
+            await onSubmit?.({
+                title,
+                description: description || undefined,
+                priority,
+                state_id: stateId || undefined
+            });
             setTitle("");
             setDescription("");
             setPriority("none");
+            setStateId(states[0]?.id || "");
             onOpenChange(false);
+        } catch (error) {
+            console.error("Failed to create:", error);
         } finally {
             setLoading(false);
         }
@@ -118,11 +129,35 @@ export function WorkItemModal({
                         </DropdownMenu>
 
                         {/* State */}
-                        <Button variant="outline" size="sm" className="gap-2">
-                            <Badge variant="secondary" className="h-2 w-2 p-0 rounded-full" />
-                            Backlog
-                            <ChevronDown className="h-3 w-3 text-neutral-40" />
-                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className="gap-2">
+                                    <Badge
+                                        variant="secondary"
+                                        className="h-2 w-2 p-0 rounded-full"
+                                        style={{ backgroundColor: selectedState?.color || "#737373" }}
+                                    />
+                                    {selectedState?.name || "Backlog"}
+                                    <ChevronDown className="h-3 w-3 text-neutral-40" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                                {states.map((s) => (
+                                    <DropdownMenuItem
+                                        key={s.id}
+                                        onClick={() => setStateId(s.id)}
+                                        className="gap-2"
+                                    >
+                                        <Badge
+                                            variant="secondary"
+                                            className="h-2 w-2 p-0 rounded-full"
+                                            style={{ backgroundColor: s.color }}
+                                        />
+                                        {s.name}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
 
                         {/* Assignee */}
                         <Button variant="outline" size="sm" className="gap-2">
@@ -151,7 +186,14 @@ export function WorkItemModal({
                         Cancelar
                     </Button>
                     <Button onClick={handleSubmit} disabled={!title.trim() || loading}>
-                        {loading ? "Criando..." : "Criar Tarefa"}
+                        {loading ? (
+                            <>
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                Criando...
+                            </>
+                        ) : (
+                            "Criar Tarefa"
+                        )}
                     </Button>
                 </div>
             </DialogContent>
