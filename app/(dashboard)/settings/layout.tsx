@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Settings, Users, Zap, Palette, Tag, Calculator, Bot } from "lucide-react";
+import { Settings, Users, Zap } from "lucide-react";
 
 const settingsTabs = [
     { id: "general", label: "Geral", icon: Settings, href: "/settings" },

@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useCycles } from "@/lib/hooks";
 import {
     Dialog,
     DialogContent,
@@ -28,52 +30,8 @@ import {
     Square,
     ArrowRight,
     TrendingUp,
+    Loader2,
 } from "lucide-react";
-
-interface Cycle {
-    id: string;
-    name: string;
-    description?: string;
-    startDate: string;
-    endDate: string;
-    status: "active" | "upcoming" | "completed";
-    totalItems: number;
-    completedItems: number;
-}
-
-// Demo data
-const demoCycles: Cycle[] = [
-    {
-        id: "1",
-        name: "Sprint 1",
-        description: "Setup inicial e autenticação",
-        startDate: "2024-12-09",
-        endDate: "2024-12-20",
-        status: "active",
-        totalItems: 12,
-        completedItems: 5,
-    },
-    {
-        id: "2",
-        name: "Sprint 2",
-        description: "Work Items e Layouts",
-        startDate: "2024-12-23",
-        endDate: "2025-01-03",
-        status: "upcoming",
-        totalItems: 8,
-        completedItems: 0,
-    },
-    {
-        id: "3",
-        name: "Sprint 0",
-        description: "Planejamento",
-        startDate: "2024-12-01",
-        endDate: "2024-12-08",
-        status: "completed",
-        totalItems: 5,
-        completedItems: 5,
-    },
-];
 
 const statusConfig = {
     active: { label: "Ativo", color: "bg-success", textColor: "text-success" },
@@ -82,10 +40,15 @@ const statusConfig = {
 };
 
 export default function CyclesClient() {
-    const [cycles, setCycles] = useState<Cycle[]>(demoCycles);
+    const params = useParams();
+    const projectId = params.id as string;
+
+    const { cycles, isLoading, createCycle, updateCycle, deleteCycle } = useCycles(projectId);
+
     const [modalOpen, setModalOpen] = useState(false);
     const [filter, setFilter] = useState<"all" | "active" | "upcoming" | "completed">("all");
     const [newCycle, setNewCycle] = useState({ name: "", description: "", startDate: "", endDate: "" });
+    const [isCreating, setIsCreating] = useState(false);
 
     const filteredCycles = cycles.filter(cycle =>
         filter === "all" || cycle.status === filter
@@ -93,26 +56,62 @@ export default function CyclesClient() {
 
     const activeCycle = cycles.find(c => c.status === "active");
 
-    const handleCreate = () => {
+    const handleCreate = async () => {
         if (!newCycle.name || !newCycle.startDate || !newCycle.endDate) return;
-        const cycle: Cycle = {
-            id: Date.now().toString(),
-            name: newCycle.name,
-            description: newCycle.description,
-            startDate: newCycle.startDate,
-            endDate: newCycle.endDate,
-            status: "upcoming",
-            totalItems: 0,
-            completedItems: 0,
-        };
-        setCycles([...cycles, cycle]);
-        setNewCycle({ name: "", description: "", startDate: "", endDate: "" });
-        setModalOpen(false);
+
+        setIsCreating(true);
+        try {
+            await createCycle({
+                name: newCycle.name,
+                description: newCycle.description || null,
+                start_date: newCycle.startDate,
+                end_date: newCycle.endDate,
+                status: "upcoming",
+            });
+            setNewCycle({ name: "", description: "", startDate: "", endDate: "" });
+            setModalOpen(false);
+        } catch (error) {
+            console.error("Failed to create cycle:", error);
+        } finally {
+            setIsCreating(false);
+        }
     };
 
-    const deleteCycle = (id: string) => {
-        setCycles(cycles.filter(c => c.id !== id));
+    const handleDelete = async (id: string) => {
+        try {
+            await deleteCycle(id);
+        } catch (error) {
+            console.error("Failed to delete cycle:", error);
+        }
     };
+
+    const handleStartCycle = async (id: string) => {
+        try {
+            // Complete any active cycle first
+            if (activeCycle) {
+                await updateCycle(activeCycle.id, { status: "completed" });
+            }
+            await updateCycle(id, { status: "active" });
+        } catch (error) {
+            console.error("Failed to start cycle:", error);
+        }
+    };
+
+    const handleCompleteCycle = async (id: string) => {
+        try {
+            await updateCycle(id, { status: "completed" });
+        } catch (error) {
+            console.error("Failed to complete cycle:", error);
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-neutral-40" />
+            </div>
+        );
+    }
 
     return (
         <div className="h-full flex flex-col">
@@ -153,18 +152,18 @@ export default function CyclesClient() {
                                 <h2 className="text-lg font-medium text-neutral">{activeCycle.name}</h2>
                             </div>
                             <p className="text-sm text-neutral-40 mt-1">
-                                {new Date(activeCycle.startDate).toLocaleDateString("pt-BR")} - {new Date(activeCycle.endDate).toLocaleDateString("pt-BR")}
+                                {new Date(activeCycle.start_date).toLocaleDateString("pt-BR")} - {new Date(activeCycle.end_date).toLocaleDateString("pt-BR")}
                             </p>
                         </div>
                         <div className="text-right">
                             <div className="flex items-center gap-2">
                                 <TrendingUp className="h-4 w-4 text-success" />
                                 <span className="text-2xl font-bold text-neutral">
-                                    {Math.round((activeCycle.completedItems / activeCycle.totalItems) * 100)}%
+                                    {activeCycle.total_items ? Math.round(((activeCycle.completed_items || 0) / activeCycle.total_items) * 100) : 0}%
                                 </span>
                             </div>
                             <p className="text-sm text-neutral-40">
-                                {activeCycle.completedItems}/{activeCycle.totalItems} itens
+                                {activeCycle.completed_items || 0}/{activeCycle.total_items || 0} itens
                             </p>
                         </div>
                     </div>
@@ -172,7 +171,7 @@ export default function CyclesClient() {
                     <div className="mt-3 h-2 bg-primary-30 rounded-full overflow-hidden">
                         <div
                             className="h-full bg-success transition-all"
-                            style={{ width: `${(activeCycle.completedItems / activeCycle.totalItems) * 100}%` }}
+                            style={{ width: `${activeCycle.total_items ? ((activeCycle.completed_items || 0) / activeCycle.total_items) * 100 : 0}%` }}
                         />
                     </div>
                 </div>
@@ -198,19 +197,19 @@ export default function CyclesClient() {
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-2 text-xs text-neutral-40">
                                     <Calendar className="h-3.5 w-3.5" />
-                                    {new Date(cycle.startDate).toLocaleDateString("pt-BR")}
+                                    {new Date(cycle.start_date).toLocaleDateString("pt-BR")}
                                     <ArrowRight className="h-3 w-3" />
-                                    {new Date(cycle.endDate).toLocaleDateString("pt-BR")}
+                                    {new Date(cycle.end_date).toLocaleDateString("pt-BR")}
                                 </div>
                                 <div className="w-24">
                                     <div className="flex items-center justify-between text-xs text-neutral-40 mb-1">
-                                        <span>{cycle.completedItems}/{cycle.totalItems}</span>
-                                        <span>{cycle.totalItems > 0 ? Math.round((cycle.completedItems / cycle.totalItems) * 100) : 0}%</span>
+                                        <span>{cycle.completed_items || 0}/{cycle.total_items || 0}</span>
+                                        <span>{cycle.total_items ? Math.round(((cycle.completed_items || 0) / cycle.total_items) * 100) : 0}%</span>
                                     </div>
                                     <div className="h-1.5 bg-primary-30 rounded-full overflow-hidden">
                                         <div
                                             className={cn("h-full transition-all", statusConfig[cycle.status].color)}
-                                            style={{ width: `${cycle.totalItems > 0 ? (cycle.completedItems / cycle.totalItems) * 100 : 0}%` }}
+                                            style={{ width: `${cycle.total_items ? ((cycle.completed_items || 0) / cycle.total_items) * 100 : 0}%` }}
                                         />
                                     </div>
                                 </div>
@@ -226,18 +225,18 @@ export default function CyclesClient() {
                                             Editar
                                         </DropdownMenuItem>
                                         {cycle.status === "upcoming" && (
-                                            <DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleStartCycle(cycle.id)}>
                                                 <Play className="h-4 w-4 mr-2" />
                                                 Iniciar Cycle
                                             </DropdownMenuItem>
                                         )}
                                         {cycle.status === "active" && (
-                                            <DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleCompleteCycle(cycle.id)}>
                                                 <Square className="h-4 w-4 mr-2" />
                                                 Finalizar Cycle
                                             </DropdownMenuItem>
                                         )}
-                                        <DropdownMenuItem className="text-danger" onClick={() => deleteCycle(cycle.id)}>
+                                        <DropdownMenuItem className="text-danger" onClick={() => handleDelete(cycle.id)}>
                                             <Trash2 className="h-4 w-4 mr-2" />
                                             Excluir
                                         </DropdownMenuItem>
@@ -299,7 +298,8 @@ export default function CyclesClient() {
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleCreate} disabled={!newCycle.name || !newCycle.startDate || !newCycle.endDate}>
+                        <Button onClick={handleCreate} disabled={!newCycle.name || !newCycle.startDate || !newCycle.endDate || isCreating}>
+                            {isCreating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                             Criar Cycle
                         </Button>
                     </DialogFooter>

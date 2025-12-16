@@ -3,52 +3,70 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Plus, StickyNote, Trash2, X } from "lucide-react";
+import { useStickies, useCurrentUser, useWorkspace } from "@/lib/hooks";
+import { Plus, StickyNote, Trash2, X, Loader2 } from "lucide-react";
 
-interface Sticky {
-    id: string;
-    content: string;
-    color: string;
-    createdAt: string;
-}
-
-const colorOptions = [
-    { name: "Amarelo", value: "#fef08a" },
-    { name: "Rosa", value: "#fecdd3" },
-    { name: "Verde", value: "#bbf7d0" },
-    { name: "Azul", value: "#bfdbfe" },
-    { name: "Roxo", value: "#ddd6fe" },
-    { name: "Laranja", value: "#fed7aa" },
+const colorOptions: { name: string; value: "yellow" | "green" | "blue" | "pink" | "purple" | "orange" }[] = [
+    { name: "Amarelo", value: "yellow" },
+    { name: "Rosa", value: "pink" },
+    { name: "Verde", value: "green" },
+    { name: "Azul", value: "blue" },
+    { name: "Roxo", value: "purple" },
+    { name: "Laranja", value: "orange" },
 ];
 
-const demoStickies: Sticky[] = [
-    { id: "1", content: "Revisar PR #42 antes do deploy", color: "#fef08a", createdAt: "2024-12-16T10:00:00" },
-    { id: "2", content: "Reunião com o time às 15h", color: "#fecdd3", createdAt: "2024-12-16T09:00:00" },
-    { id: "3", content: "Pesquisar bibliotecas de drag-and-drop para React", color: "#bbf7d0", createdAt: "2024-12-15T14:00:00" },
-];
+const colorMap: Record<string, string> = {
+    yellow: "#fef08a",
+    pink: "#fecdd3",
+    green: "#bbf7d0",
+    blue: "#bfdbfe",
+    purple: "#ddd6fe",
+    orange: "#fed7aa",
+};
 
 export default function StickiesPage() {
-    const [stickies, setStickies] = useState<Sticky[]>(demoStickies);
+    const { user } = useCurrentUser();
+    const { workspace } = useWorkspace(user?.id ?? null);
+    const { stickies, isLoading, createSticky, deleteSticky } = useStickies(workspace?.id ?? null);
+
     const [newContent, setNewContent] = useState("");
-    const [selectedColor, setSelectedColor] = useState(colorOptions[0].value);
+    const [selectedColor, setSelectedColor] = useState<"yellow" | "green" | "blue" | "pink" | "purple" | "orange">("yellow");
     const [isCreating, setIsCreating] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
-    const addSticky = () => {
+    const handleCreate = async () => {
         if (!newContent.trim()) return;
-        const sticky: Sticky = {
-            id: Date.now().toString(),
-            content: newContent,
-            color: selectedColor,
-            createdAt: new Date().toISOString(),
-        };
-        setStickies([sticky, ...stickies]);
-        setNewContent("");
-        setIsCreating(false);
+
+        setIsSaving(true);
+        try {
+            await createSticky({
+                content: newContent,
+                color: selectedColor,
+            });
+            setNewContent("");
+            setIsCreating(false);
+        } catch (error) {
+            console.error("Failed to create sticky:", error);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
-    const deleteSticky = (id: string) => {
-        setStickies(stickies.filter(s => s.id !== id));
+    const handleDelete = async (id: string) => {
+        try {
+            await deleteSticky(id);
+        } catch (error) {
+            console.error("Failed to delete sticky:", error);
+        }
     };
+
+    if (isLoading) {
+        return (
+            <div className="max-w-4xl mx-auto p-6 flex items-center justify-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin text-neutral-40" />
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-4xl mx-auto p-6">
@@ -65,7 +83,7 @@ export default function StickiesPage() {
             {isCreating && (
                 <div
                     className="mb-6 p-4 rounded-lg shadow-lg"
-                    style={{ backgroundColor: selectedColor }}
+                    style={{ backgroundColor: colorMap[selectedColor] }}
                 >
                     <div className="flex justify-between items-start mb-3">
                         <div className="flex gap-1">
@@ -77,7 +95,7 @@ export default function StickiesPage() {
                                         "w-5 h-5 rounded-full transition-transform",
                                         selectedColor === color.value && "ring-2 ring-gray-600 scale-110"
                                     )}
-                                    style={{ backgroundColor: color.value }}
+                                    style={{ backgroundColor: colorMap[color.value] }}
                                 />
                             ))}
                         </div>
@@ -93,7 +111,8 @@ export default function StickiesPage() {
                         autoFocus
                     />
                     <div className="flex justify-end">
-                        <Button size="sm" onClick={addSticky} disabled={!newContent.trim()}>
+                        <Button size="sm" onClick={handleCreate} disabled={!newContent.trim() || isSaving}>
+                            {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                             Salvar
                         </Button>
                     </div>
@@ -106,10 +125,10 @@ export default function StickiesPage() {
                     <div
                         key={sticky.id}
                         className="p-4 rounded-lg shadow-md group relative"
-                        style={{ backgroundColor: sticky.color }}
+                        style={{ backgroundColor: colorMap[sticky.color] || "#fef08a" }}
                     >
                         <button
-                            onClick={() => deleteSticky(sticky.id)}
+                            onClick={() => handleDelete(sticky.id)}
                             className="absolute top-2 right-2 p-1 rounded hover:bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                             <Trash2 className="h-4 w-4 text-gray-600" />
@@ -118,7 +137,7 @@ export default function StickiesPage() {
                             {sticky.content}
                         </p>
                         <p className="text-xs text-gray-500 mt-3">
-                            {new Date(sticky.createdAt).toLocaleDateString("pt-BR", {
+                            {new Date(sticky.created_at).toLocaleDateString("pt-BR", {
                                 day: "numeric",
                                 month: "short",
                                 hour: "2-digit",
