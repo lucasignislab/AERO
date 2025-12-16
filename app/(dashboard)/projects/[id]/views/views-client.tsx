@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useSavedViews, useCurrentUser, useWorkspace } from "@/lib/hooks";
 import {
     Dialog,
     DialogContent,
@@ -27,93 +29,59 @@ import {
     Globe,
     Filter,
     Copy,
+    Loader2,
 } from "lucide-react";
 
-interface View {
-    id: string;
-    name: string;
-    description?: string;
-    isPublic: boolean;
-    filters: {
-        state?: string[];
-        priority?: string[];
-        assignee?: string[];
-        labels?: string[];
-    };
-    createdBy: { id: string; name: string };
-    createdAt: string;
-}
-
-const demoViews: View[] = [
-    {
-        id: "1",
-        name: "Todos os itens de trabalho",
-        description: "Todos os itens sem filtro",
-        isPublic: true,
-        filters: {},
-        createdBy: { id: "1", name: "Sistema" },
-        createdAt: "2024-01-01",
-    },
-    {
-        id: "2",
-        name: "Atribuído a mim",
-        isPublic: false,
-        filters: { assignee: ["me"] },
-        createdBy: { id: "1", name: "Lucas" },
-        createdAt: "2024-12-10",
-    },
-    {
-        id: "3",
-        name: "Urgentes",
-        description: "Itens com prioridade urgente ou alta",
-        isPublic: true,
-        filters: { priority: ["urgent", "high"] },
-        createdBy: { id: "2", name: "Maria" },
-        createdAt: "2024-12-15",
-    },
-    {
-        id: "4",
-        name: "Bugs Abertos",
-        isPublic: true,
-        filters: { labels: ["bug"], state: ["backlog", "todo", "in_progress"] },
-        createdBy: { id: "1", name: "Lucas" },
-        createdAt: "2024-12-12",
-    },
-];
-
 export default function ViewsClient() {
-    const [views, setViews] = useState<View[]>(demoViews);
+    const params = useParams();
+    const projectId = params.id as string;
+
+    const { user } = useCurrentUser();
+    const { workspace } = useWorkspace(user?.id ?? null);
+    const { views, isLoading, createView, deleteView } = useSavedViews(workspace?.id ?? null, projectId);
+
     const [modalOpen, setModalOpen] = useState(false);
     const [newView, setNewView] = useState({ name: "", description: "", isPublic: true });
+    const [isCreating, setIsCreating] = useState(false);
 
-    const handleCreate = () => {
+    const handleCreate = async () => {
         if (!newView.name) return;
-        const view: View = {
-            id: Date.now().toString(),
-            name: newView.name,
-            description: newView.description,
-            isPublic: newView.isPublic,
-            filters: {},
-            createdBy: { id: "1", name: "Lucas" },
-            createdAt: new Date().toISOString().split("T")[0],
-        };
-        setViews([...views, view]);
-        setNewView({ name: "", description: "", isPublic: true });
-        setModalOpen(false);
+
+        setIsCreating(true);
+        try {
+            await createView({
+                name: newView.name,
+                description: newView.description || null,
+                is_private: !newView.isPublic,
+            });
+            setNewView({ name: "", description: "", isPublic: true });
+            setModalOpen(false);
+        } catch (error) {
+            console.error("Failed to create view:", error);
+        } finally {
+            setIsCreating(false);
+        }
     };
 
-    const deleteView = (id: string) => {
-        setViews(views.filter(v => v.id !== id));
+    const handleDelete = async (id: string) => {
+        try {
+            await deleteView(id);
+        } catch (error) {
+            console.error("Failed to delete view:", error);
+        }
     };
 
-    const getFilterCount = (view: View) => {
-        let count = 0;
-        if (view.filters.state?.length) count += view.filters.state.length;
-        if (view.filters.priority?.length) count += view.filters.priority.length;
-        if (view.filters.assignee?.length) count += view.filters.assignee.length;
-        if (view.filters.labels?.length) count += view.filters.labels.length;
-        return count;
+    const getFilterCount = (queries: Record<string, unknown>) => {
+        return Object.keys(queries).length;
     };
+
+    if (isLoading) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-neutral-40" />
+            </div>
+        );
+    }
 
     return (
         <div className="h-full flex flex-col">
@@ -129,7 +97,7 @@ export default function ViewsClient() {
             {/* Views List */}
             <div className="space-y-2">
                 {views.map((view) => {
-                    const filterCount = getFilterCount(view);
+                    const filterCount = getFilterCount(view.queries);
                     return (
                         <div
                             key={view.id}
@@ -140,10 +108,10 @@ export default function ViewsClient() {
                                 <div>
                                     <div className="flex items-center gap-2">
                                         <h3 className="text-sm font-medium text-neutral">{view.name}</h3>
-                                        {view.isPublic ? (
-                                            <Globe className="h-3.5 w-3.5 text-neutral-40" />
-                                        ) : (
+                                        {view.is_private ? (
                                             <Lock className="h-3.5 w-3.5 text-neutral-40" />
+                                        ) : (
+                                            <Globe className="h-3.5 w-3.5 text-neutral-40" />
                                         )}
                                     </div>
                                     {view.description && (
@@ -159,7 +127,7 @@ export default function ViewsClient() {
                                     </Badge>
                                 )}
                                 <span className="text-xs text-neutral-40">
-                                    {view.createdBy.name} • {new Date(view.createdAt).toLocaleDateString("pt-BR")}
+                                    {view.created_by?.display_name || "Anônimo"} • {new Date(view.created_at).toLocaleDateString("pt-BR")}
                                 </span>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -176,7 +144,7 @@ export default function ViewsClient() {
                                             <Copy className="h-4 w-4 mr-2" />
                                             Duplicar
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem className="text-danger" onClick={() => deleteView(view.id)}>
+                                        <DropdownMenuItem className="text-danger" onClick={() => handleDelete(view.id)}>
                                             <Trash2 className="h-4 w-4 mr-2" />
                                             Excluir
                                         </DropdownMenuItem>
@@ -246,7 +214,8 @@ export default function ViewsClient() {
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleCreate} disabled={!newView.name}>
+                        <Button onClick={handleCreate} disabled={!newView.name || isCreating}>
+                            {isCreating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                             Criar View
                         </Button>
                     </DialogFooter>

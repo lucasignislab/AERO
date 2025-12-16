@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { useModules } from "@/lib/hooks";
 import {
     Dialog,
     DialogContent,
@@ -26,95 +28,67 @@ import {
     MoreHorizontal,
     Pencil,
     Trash2,
-    Users,
     Calendar,
     Layers,
+    Loader2,
 } from "lucide-react";
 
-interface Module {
-    id: string;
-    name: string;
-    description?: string;
-    status: "backlog" | "planned" | "in_progress" | "paused" | "completed" | "cancelled";
-    lead?: { id: string; name: string; avatar_url?: string };
-    startDate?: string;
-    endDate?: string;
-    totalItems: number;
-    completedItems: number;
-}
+type ModuleStatus = "backlog" | "planned" | "in-progress" | "paused" | "completed" | "cancelled";
 
-const statusConfig = {
-    backlog: { label: "Backlog", color: "bg-neutral-40", textColor: "text-neutral-40" },
-    planned: { label: "Planejado", color: "bg-blue-500", textColor: "text-blue-400" },
-    in_progress: { label: "Em Progresso", color: "bg-yellow-500", textColor: "text-yellow-400" },
-    paused: { label: "Pausado", color: "bg-orange-500", textColor: "text-orange-400" },
-    completed: { label: "Concluído", color: "bg-success", textColor: "text-success" },
-    cancelled: { label: "Cancelado", color: "bg-danger", textColor: "text-danger" },
+const statusConfig: Record<ModuleStatus, { label: string; color: string }> = {
+    backlog: { label: "Backlog", color: "bg-neutral-40" },
+    planned: { label: "Planejado", color: "bg-blue-500" },
+    "in-progress": { label: "Em Progresso", color: "bg-yellow-500" },
+    paused: { label: "Pausado", color: "bg-orange-500" },
+    completed: { label: "Concluído", color: "bg-success" },
+    cancelled: { label: "Cancelado", color: "bg-danger" },
 };
 
-const demoModules: Module[] = [
-    {
-        id: "1",
-        name: "Autenticação",
-        description: "Login, signup e OAuth",
-        status: "completed",
-        lead: { id: "1", name: "Lucas" },
-        totalItems: 8,
-        completedItems: 8,
-    },
-    {
-        id: "2",
-        name: "Work Items",
-        description: "Kanban, lista e todos os layouts",
-        status: "in_progress",
-        lead: { id: "2", name: "Maria" },
-        startDate: "2024-12-01",
-        endDate: "2024-12-31",
-        totalItems: 15,
-        completedItems: 10,
-    },
-    {
-        id: "3",
-        name: "Analytics",
-        description: "Dashboards e gráficos",
-        status: "planned",
-        totalItems: 6,
-        completedItems: 0,
-    },
-    {
-        id: "4",
-        name: "Integrações",
-        description: "GitHub, Slack, etc",
-        status: "backlog",
-        totalItems: 0,
-        completedItems: 0,
-    },
-];
-
 export default function ModulesClient() {
-    const [modules, setModules] = useState<Module[]>(demoModules);
+    const params = useParams();
+    const projectId = params.id as string;
+
+    const { modules, isLoading, createModule, deleteModule } = useModules(projectId);
+
     const [modalOpen, setModalOpen] = useState(false);
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-    const [newModule, setNewModule] = useState({ name: "", description: "", status: "backlog" as Module["status"] });
+    const [newModule, setNewModule] = useState({ name: "", description: "", status: "backlog" as ModuleStatus });
+    const [isCreating, setIsCreating] = useState(false);
 
-    const handleCreate = () => {
+    const handleCreate = async () => {
         if (!newModule.name) return;
-        const module: Module = {
-            id: Date.now().toString(),
-            name: newModule.name,
-            description: newModule.description,
-            status: newModule.status,
-            totalItems: 0,
-            completedItems: 0,
-        };
-        setModules([...modules, module]);
-        setNewModule({ name: "", description: "", status: "backlog" });
-        setModalOpen(false);
+
+        setIsCreating(true);
+        try {
+            await createModule({
+                name: newModule.name,
+                description: newModule.description || null,
+                status: newModule.status,
+            });
+            setNewModule({ name: "", description: "", status: "backlog" });
+            setModalOpen(false);
+        } catch (error) {
+            console.error("Failed to create module:", error);
+        } finally {
+            setIsCreating(false);
+        }
     };
 
-    const deleteModule = (id: string) => {
-        setModules(modules.filter(m => m.id !== id));
+    const handleDelete = async (id: string) => {
+        try {
+            await deleteModule(id);
+        } catch (error) {
+            console.error("Failed to delete module:", error);
+        }
     };
+
+    if (isLoading) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-neutral-40" />
+            </div>
+        );
+    }
 
     return (
         <div className="h-full flex flex-col">
@@ -159,8 +133,8 @@ export default function ModulesClient() {
                         >
                             <div className="flex items-start justify-between mb-3">
                                 <div>
-                                    <Badge className={cn("mb-2", statusConfig[module.status].color)}>
-                                        {statusConfig[module.status].label}
+                                    <Badge className={cn("mb-2", statusConfig[module.status]?.color || "bg-neutral-40")}>
+                                        {statusConfig[module.status]?.label || module.status}
                                     </Badge>
                                     <h3 className="text-sm font-medium text-neutral">{module.name}</h3>
                                     {module.description && (
@@ -175,7 +149,7 @@ export default function ModulesClient() {
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
                                         <DropdownMenuItem><Pencil className="h-4 w-4 mr-2" />Editar</DropdownMenuItem>
-                                        <DropdownMenuItem className="text-danger" onClick={() => deleteModule(module.id)}>
+                                        <DropdownMenuItem className="text-danger" onClick={() => handleDelete(module.id)}>
                                             <Trash2 className="h-4 w-4 mr-2" />Excluir
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
@@ -185,13 +159,13 @@ export default function ModulesClient() {
                             {/* Progress */}
                             <div className="mb-3">
                                 <div className="flex items-center justify-between text-xs text-neutral-40 mb-1">
-                                    <span>{module.completedItems}/{module.totalItems} itens</span>
-                                    <span>{module.totalItems > 0 ? Math.round((module.completedItems / module.totalItems) * 100) : 0}%</span>
+                                    <span>{module.completed_items || 0}/{module.total_items || 0} itens</span>
+                                    <span>{module.total_items ? Math.round(((module.completed_items || 0) / module.total_items) * 100) : 0}%</span>
                                 </div>
                                 <div className="h-1.5 bg-primary-30 rounded-full overflow-hidden">
                                     <div
-                                        className={cn("h-full transition-all", statusConfig[module.status].color)}
-                                        style={{ width: `${module.totalItems > 0 ? (module.completedItems / module.totalItems) * 100 : 0}%` }}
+                                        className={cn("h-full transition-all", statusConfig[module.status]?.color || "bg-neutral-40")}
+                                        style={{ width: `${module.total_items ? ((module.completed_items || 0) / module.total_items) * 100 : 0}%` }}
                                     />
                                 </div>
                             </div>
@@ -201,16 +175,16 @@ export default function ModulesClient() {
                                 {module.lead && (
                                     <div className="flex items-center gap-1">
                                         <Avatar className="h-4 w-4">
-                                            <AvatarImage src={module.lead.avatar_url} />
-                                            <AvatarFallback className="text-[8px]">{module.lead.name[0]}</AvatarFallback>
+                                            <AvatarImage src={module.lead.avatar_url || undefined} />
+                                            <AvatarFallback className="text-[8px]">{module.lead.display_name?.[0] || "?"}</AvatarFallback>
                                         </Avatar>
-                                        <span>{module.lead.name}</span>
+                                        <span>{module.lead.display_name}</span>
                                     </div>
                                 )}
-                                {module.startDate && module.endDate && (
+                                {module.start_date && module.end_date && (
                                     <div className="flex items-center gap-1">
                                         <Calendar className="h-3 w-3" />
-                                        <span>{new Date(module.startDate).toLocaleDateString("pt-BR", { month: "short", day: "numeric" })} - {new Date(module.endDate).toLocaleDateString("pt-BR", { month: "short", day: "numeric" })}</span>
+                                        <span>{new Date(module.start_date).toLocaleDateString("pt-BR", { month: "short", day: "numeric" })} - {new Date(module.end_date).toLocaleDateString("pt-BR", { month: "short", day: "numeric" })}</span>
                                     </div>
                                 )}
                             </div>
@@ -229,8 +203,8 @@ export default function ModulesClient() {
                                 <div>
                                     <div className="flex items-center gap-2">
                                         <h3 className="text-sm font-medium text-neutral">{module.name}</h3>
-                                        <Badge className={cn("text-[10px]", statusConfig[module.status].color)}>
-                                            {statusConfig[module.status].label}
+                                        <Badge className={cn("text-[10px]", statusConfig[module.status]?.color || "bg-neutral-40")}>
+                                            {statusConfig[module.status]?.label || module.status}
                                         </Badge>
                                     </div>
                                     {module.description && (
@@ -242,13 +216,13 @@ export default function ModulesClient() {
                                 <div className="w-32">
                                     <div className="h-1.5 bg-primary-30 rounded-full overflow-hidden">
                                         <div
-                                            className={cn("h-full transition-all", statusConfig[module.status].color)}
-                                            style={{ width: `${module.totalItems > 0 ? (module.completedItems / module.totalItems) * 100 : 0}%` }}
+                                            className={cn("h-full transition-all", statusConfig[module.status]?.color || "bg-neutral-40")}
+                                            style={{ width: `${module.total_items ? ((module.completed_items || 0) / module.total_items) * 100 : 0}%` }}
                                         />
                                     </div>
                                 </div>
                                 <span className="text-sm text-neutral-40 w-16 text-right">
-                                    {module.totalItems > 0 ? Math.round((module.completedItems / module.totalItems) * 100) : 0}%
+                                    {module.total_items ? Math.round(((module.completed_items || 0) / module.total_items) * 100) : 0}%
                                 </span>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
@@ -258,7 +232,7 @@ export default function ModulesClient() {
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
                                         <DropdownMenuItem><Pencil className="h-4 w-4 mr-2" />Editar</DropdownMenuItem>
-                                        <DropdownMenuItem className="text-danger" onClick={() => deleteModule(module.id)}>
+                                        <DropdownMenuItem className="text-danger" onClick={() => handleDelete(module.id)}>
                                             <Trash2 className="h-4 w-4 mr-2" />Excluir
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
@@ -303,7 +277,7 @@ export default function ModulesClient() {
                             <label className="block text-sm font-medium text-neutral-30 mb-1">Status</label>
                             <select
                                 value={newModule.status}
-                                onChange={(e) => setNewModule({ ...newModule, status: e.target.value as Module["status"] })}
+                                onChange={(e) => setNewModule({ ...newModule, status: e.target.value as ModuleStatus })}
                                 className="w-full px-3 py-2 rounded-md bg-primary-20 border border-primary-30 text-neutral text-sm"
                             >
                                 {Object.entries(statusConfig).map(([key, { label }]) => (
@@ -314,7 +288,8 @@ export default function ModulesClient() {
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleCreate} disabled={!newModule.name}>
+                        <Button onClick={handleCreate} disabled={!newModule.name || isCreating}>
+                            {isCreating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                             Criar Module
                         </Button>
                     </DialogFooter>

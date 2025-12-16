@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { usePages } from "@/lib/hooks";
 import {
     Dialog,
     DialogContent,
@@ -28,56 +30,8 @@ import {
     Star,
     Archive,
     Clock,
+    Loader2,
 } from "lucide-react";
-
-interface Page {
-    id: string;
-    title: string;
-    isPublic: boolean;
-    isLocked: boolean;
-    isFavorite: boolean;
-    updatedAt: string;
-    createdBy: { id: string; name: string };
-}
-
-const demoPages: Page[] = [
-    {
-        id: "1",
-        title: "Roadmap 2025",
-        isPublic: true,
-        isLocked: false,
-        isFavorite: true,
-        updatedAt: "2024-12-16T10:30:00",
-        createdBy: { id: "1", name: "Lucas" },
-    },
-    {
-        id: "2",
-        title: "Guia de Contribuição",
-        isPublic: true,
-        isLocked: true,
-        isFavorite: false,
-        updatedAt: "2024-12-15T14:00:00",
-        createdBy: { id: "2", name: "Maria" },
-    },
-    {
-        id: "3",
-        title: "Notas da Reunião - Sprint Planning",
-        isPublic: false,
-        isLocked: false,
-        isFavorite: false,
-        updatedAt: "2024-12-14T09:00:00",
-        createdBy: { id: "1", name: "Lucas" },
-    },
-    {
-        id: "4",
-        title: "Arquitetura do Sistema",
-        isPublic: true,
-        isLocked: false,
-        isFavorite: true,
-        updatedAt: "2024-12-10T16:45:00",
-        createdBy: { id: "3", name: "Pedro" },
-    },
-];
 
 function getTimeAgo(date: string) {
     const now = new Date();
@@ -94,40 +48,68 @@ function getTimeAgo(date: string) {
 }
 
 export default function PagesClient() {
-    const [pages, setPages] = useState<Page[]>(demoPages);
+    const params = useParams();
+    const projectId = params.id as string;
+
+    const { pages, isLoading, createPage, deletePage } = usePages(projectId);
+
     const [modalOpen, setModalOpen] = useState(false);
-    const [filter, setFilter] = useState<"all" | "favorites" | "private">("all");
-    const [newPage, setNewPage] = useState({ title: "", isPublic: true });
+    const [filter, setFilter] = useState<"all" | "published" | "private">("all");
+    const [newPage, setNewPage] = useState({ title: "", isPublished: false });
+    const [isCreating, setIsCreating] = useState(false);
+    const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
     const filteredPages = pages.filter(page => {
-        if (filter === "favorites") return page.isFavorite;
-        if (filter === "private") return !page.isPublic;
+        if (filter === "published") return page.is_published;
+        if (filter === "private") return !page.is_published;
         return true;
     });
 
-    const handleCreate = () => {
+    const handleCreate = async () => {
         if (!newPage.title) return;
-        const page: Page = {
-            id: Date.now().toString(),
-            title: newPage.title,
-            isPublic: newPage.isPublic,
-            isLocked: false,
-            isFavorite: false,
-            updatedAt: new Date().toISOString(),
-            createdBy: { id: "1", name: "Lucas" },
-        };
-        setPages([page, ...pages]);
-        setNewPage({ title: "", isPublic: true });
-        setModalOpen(false);
+
+        setIsCreating(true);
+        try {
+            await createPage({
+                title: newPage.title,
+                is_published: newPage.isPublished,
+            });
+            setNewPage({ title: "", isPublished: false });
+            setModalOpen(false);
+        } catch (error) {
+            console.error("Failed to create page:", error);
+        } finally {
+            setIsCreating(false);
+        }
     };
 
     const toggleFavorite = (id: string) => {
-        setPages(pages.map(p => p.id === id ? { ...p, isFavorite: !p.isFavorite } : p));
+        setFavorites(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+            return next;
+        });
     };
 
-    const deletePage = (id: string) => {
-        setPages(pages.filter(p => p.id !== id));
+    const handleDelete = async (id: string) => {
+        try {
+            await deletePage(id);
+        } catch (error) {
+            console.error("Failed to delete page:", error);
+        }
     };
+
+    if (isLoading) {
+        return (
+            <div className="h-full flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-neutral-40" />
+            </div>
+        );
+    }
 
     return (
         <div className="h-full flex flex-col">
@@ -136,7 +118,7 @@ export default function PagesClient() {
                 <div className="flex items-center gap-4">
                     <h1 className="text-xl font-semibold text-neutral">Pages</h1>
                     <div className="flex bg-primary-20 rounded-lg p-1">
-                        {(["all", "favorites", "private"] as const).map((f) => (
+                        {(["all", "published", "private"] as const).map((f) => (
                             <button
                                 key={f}
                                 onClick={() => setFilter(f)}
@@ -147,7 +129,7 @@ export default function PagesClient() {
                                         : "text-neutral-30 hover:text-neutral"
                                 )}
                             >
-                                {f === "all" ? "Todas" : f === "favorites" ? "Favoritas" : "Privadas"}
+                                {f === "all" ? "Todas" : f === "published" ? "Públicas" : "Privadas"}
                             </button>
                         ))}
                     </div>
@@ -170,18 +152,15 @@ export default function PagesClient() {
                             <div>
                                 <div className="flex items-center gap-2">
                                     <h3 className="text-sm font-medium text-neutral">{page.title}</h3>
-                                    {page.isLocked && (
-                                        <Lock className="h-3.5 w-3.5 text-warning" />
-                                    )}
-                                    {!page.isPublic && (
+                                    {!page.is_published && (
                                         <Lock className="h-3.5 w-3.5 text-neutral-40" />
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-neutral-40">
                                     <Clock className="h-3 w-3" />
-                                    <span>{getTimeAgo(page.updatedAt)}</span>
+                                    <span>{getTimeAgo(page.updated_at)}</span>
                                     <span>•</span>
-                                    <span>{page.createdBy.name}</span>
+                                    <span>{page.created_by?.display_name || "Anônimo"}</span>
                                 </div>
                             </div>
                         </div>
@@ -193,7 +172,7 @@ export default function PagesClient() {
                                 <Star
                                     className={cn(
                                         "h-4 w-4 transition-colors",
-                                        page.isFavorite ? "text-yellow-400 fill-yellow-400" : "text-neutral-40"
+                                        favorites.has(page.id) ? "text-yellow-400 fill-yellow-400" : "text-neutral-40"
                                     )}
                                 />
                             </button>
@@ -212,7 +191,7 @@ export default function PagesClient() {
                                         <Archive className="h-4 w-4 mr-2" />
                                         Arquivar
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem className="text-danger" onClick={() => deletePage(page.id)}>
+                                    <DropdownMenuItem className="text-danger" onClick={() => handleDelete(page.id)}>
                                         <Trash2 className="h-4 w-4 mr-2" />
                                         Excluir
                                     </DropdownMenuItem>
@@ -251,8 +230,8 @@ export default function PagesClient() {
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
                                         type="radio"
-                                        checked={newPage.isPublic}
-                                        onChange={() => setNewPage({ ...newPage, isPublic: true })}
+                                        checked={newPage.isPublished}
+                                        onChange={() => setNewPage({ ...newPage, isPublished: true })}
                                         className="accent-brand"
                                     />
                                     <Globe className="h-4 w-4 text-neutral-40" />
@@ -261,8 +240,8 @@ export default function PagesClient() {
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
                                         type="radio"
-                                        checked={!newPage.isPublic}
-                                        onChange={() => setNewPage({ ...newPage, isPublic: false })}
+                                        checked={!newPage.isPublished}
+                                        onChange={() => setNewPage({ ...newPage, isPublished: false })}
                                         className="accent-brand"
                                     />
                                     <Lock className="h-4 w-4 text-neutral-40" />
@@ -273,7 +252,8 @@ export default function PagesClient() {
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleCreate} disabled={!newPage.title}>
+                        <Button onClick={handleCreate} disabled={!newPage.title || isCreating}>
+                            {isCreating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                             Criar Page
                         </Button>
                     </DialogFooter>
