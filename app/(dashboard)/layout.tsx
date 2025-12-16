@@ -23,6 +23,12 @@ export default async function DashboardLayout({
         .eq("id", user.id)
         .single();
 
+    // Fetch projects for sidebar
+    const { data: projects } = await supabase
+        .from("projects")
+        .select("id, name, icon, color")
+        .order("created_at", { ascending: false });
+
     return (
         <TooltipProvider>
             <div className="flex h-screen bg-background">
@@ -32,6 +38,7 @@ export default async function DashboardLayout({
                         display_name: profile?.display_name,
                         avatar_url: profile?.avatar_url,
                     }}
+                    projects={projects || []}
                 />
                 <div className="flex-1 flex flex-col overflow-hidden">
                     <Header />
