@@ -1,207 +1,176 @@
 "use client";
 
-import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronRight, MoreHorizontal } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+    ChevronDown,
+    ChevronRight,
+    Circle,
+    CircleDot,
+    CheckCircle2,
+    XCircle,
+    Plus,
+    MoreHorizontal,
+    MessageSquare,
+    Eye,
+    Paperclip,
+    AlertCircle,
+    SignalHigh,
+    SignalMedium,
+    SignalLow,
+    CircleSlash,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface WorkItem {
     id: string;
     identifier: string;
     title: string;
     priority: "urgent" | "high" | "medium" | "low" | "none";
-    state?: { id: string; name: string; color: string };
-    assignees?: { id: string; name: string; avatar?: string }[];
+    state: { id: string; name: string; color: string; group_name: string };
+    assignees: { id: string; name: string; avatar?: string }[];
     labels?: { id: string; name: string; color: string }[];
     dueDate?: string;
-    children?: WorkItem[];
+    startDate?: string;
 }
 
 interface ListViewProps {
     items: WorkItem[];
     onItemClick?: (item: WorkItem) => void;
-    onItemComplete?: (item: WorkItem) => void;
-    groupBy?: "state" | "priority" | "assignee" | "none";
 }
 
-const priorityLabels = {
-    urgent: "Urgente",
-    high: "Alta",
-    medium: "Média",
-    low: "Baixa",
-    none: "Sem prioridade",
+const StateIcon = ({ group, color }: { group: string; color: string }) => {
+    switch (group) {
+        case "backlog":
+            return <Circle className="h-4 w-4 text-neutral-40" />;
+        case "unstarted":
+            return <Circle className="h-4 w-4 text-white" />;
+        case "started":
+            return <CircleDot className="h-4 w-4 text-warning" />;
+        case "completed":
+            return <CheckCircle2 className="h-4 w-4 text-success" />;
+        case "cancelled":
+            return <XCircle className="h-4 w-4 text-neutral-40" />;
+        default:
+            return <Circle className="h-4 w-4" style={{ color }} />;
+    }
 };
 
-const priorityColors = {
-    urgent: "text-danger",
-    high: "text-warning",
-    medium: "text-info",
-    low: "text-success",
-    none: "text-neutral-40",
+const PriorityIcon = ({ priority }: { priority: string }) => {
+    switch (priority) {
+        case "urgent":
+            return <AlertCircle className="h-3.5 w-3.5 text-danger" />;
+        case "high":
+            return <SignalHigh className="h-3.5 w-3.5 text-warning" />;
+        case "medium":
+            return <SignalMedium className="h-3.5 w-3.5 text-info" />;
+        case "low":
+            return <SignalLow className="h-3.5 w-3.5 text-success" />;
+        default:
+            return <CircleSlash className="h-3.5 w-3.5 text-neutral-40" />;
+    }
 };
 
-export function ListView({ items, onItemClick, onItemComplete }: ListViewProps) {
-    return (
-        <div className="bg-primary-20 rounded-lg border border-primary-30 overflow-hidden">
-            {/* Header */}
-            <div className="grid grid-cols-12 gap-4 px-4 py-2 border-b border-primary-30 text-xs font-medium text-neutral-40 uppercase tracking-wider">
-                <div className="col-span-6">Tarefa</div>
-                <div className="col-span-2">Estado</div>
-                <div className="col-span-2">Prioridade</div>
-                <div className="col-span-2">Responsável</div>
-            </div>
-
-            {/* Items */}
-            <div className="divide-y divide-primary-30">
-                {items.map((item) => (
-                    <ListItem
-                        key={item.id}
-                        item={item}
-                        onItemClick={onItemClick}
-                        onItemComplete={onItemComplete}
-                    />
-                ))}
-            </div>
-        </div>
-    );
-}
-
-function ListItem({
-    item,
-    onItemClick,
-    onItemComplete,
-    depth = 0,
-}: {
-    item: WorkItem;
-    onItemClick?: (item: WorkItem) => void;
-    onItemComplete?: (item: WorkItem) => void;
-    depth?: number;
-}) {
-    const hasChildren = item.children && item.children.length > 0;
+export function ListView({ items, onItemClick }: ListViewProps) {
+    // Group items by state
+    const states = Array.from(new Set(items.map(i => i.state.id)))
+        .map(id => items.find(i => i.state.id === id)!.state)
+        .sort((a, b) => {
+            const order = ["backlog", "unstarted", "started", "completed", "cancelled"];
+            return order.indexOf(a.group_name) - order.indexOf(b.group_name);
+        });
 
     return (
-        <>
-            <div
-                className={cn(
-                    "grid grid-cols-12 gap-4 px-4 py-3 hover:bg-primary-10 cursor-pointer group transition-colors",
-                    depth > 0 && "bg-primary-30/30"
-                )}
-                onClick={() => onItemClick?.(item)}
-                style={{ paddingLeft: `${16 + depth * 24}px` }}
-            >
-                {/* Task */}
-                <div className="col-span-6 flex items-center gap-3 min-w-0">
-                    <Checkbox
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onItemComplete?.(item);
-                        }}
-                        className="border-neutral-40"
-                    />
+        <div className="space-y-6">
+            {states.map((state) => (
+                <div key={state.id} className="space-y-1">
+                    {/* State Header */}
+                    <div className="flex items-center justify-between group px-2 py-1">
+                        <div className="flex items-center gap-2">
+                            <StateIcon group={state.group_name} color={state.color} />
+                            <span className="text-sm font-semibold text-neutral">
+                                {state.name}
+                            </span>
+                            <span className="text-xs text-neutral-40">
+                                {items.filter(i => i.state.id === state.id).length}
+                            </span>
+                        </div>
+                        <button className="opacity-0 group-hover:opacity-100 p-1 hover:bg-primary-20 rounded transition-opacity">
+                            <Plus className="h-4 w-4 text-neutral-40" />
+                        </button>
+                    </div>
 
-                    {hasChildren && (
-                        <ChevronRight className="h-4 w-4 text-neutral-40 flex-shrink-0" />
-                    )}
-
-                    <span className="text-xs text-neutral-40 flex-shrink-0">
-                        {item.identifier}
-                    </span>
-
-                    <span className="text-sm text-neutral truncate">{item.title}</span>
-
-                    {/* Labels */}
-                    {item.labels && item.labels.length > 0 && (
-                        <div className="flex gap-1 flex-shrink-0">
-                            {item.labels.slice(0, 2).map((label) => (
-                                <Badge
-                                    key={label.id}
-                                    variant="outline"
-                                    className="text-xs px-1.5 py-0"
-                                    style={{ borderColor: label.color, color: label.color }}
+                    {/* Items List */}
+                    <div className="space-y-[1px]">
+                        {items
+                            .filter(i => i.state.id === state.id)
+                            .map((item) => (
+                                <div
+                                    key={item.id}
+                                    onClick={() => onItemClick?.(item)}
+                                    className="flex items-center gap-4 px-3 py-2.5 hover:bg-primary-20/50 group cursor-pointer border-y border-transparent hover:border-primary-30 transition-all rounded-md"
                                 >
-                                    {label.name}
-                                </Badge>
+                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        <span className="text-xs font-medium text-neutral-40 w-24 flex-shrink-0">
+                                            {item.identifier}
+                                        </span>
+                                        <span className="text-sm text-neutral truncate font-medium">
+                                            {item.title}
+                                        </span>
+                                    </div>
+
+                                    {/* Item Meta */}
+                                    <div className="flex items-center gap-3 flex-shrink-0">
+                                        {/* Status Badge */}
+                                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary-20/50 border border-primary-30">
+                                            <StateIcon group={item.state.group_name} color={item.state.color} />
+                                            <span className="text-[10px] font-medium text-neutral-30">
+                                                {item.state.name}
+                                            </span>
+                                        </div>
+
+                                        {/* Priority */}
+                                        <div className="p-1 rounded bg-primary-20/50 border border-primary-30">
+                                            <PriorityIcon priority={item.priority} />
+                                        </div>
+
+                                        {/* Date */}
+                                        {(item.startDate || item.dueDate) && (
+                                            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-primary-20/50 border border-primary-30 text-[10px] text-neutral-30">
+                                                <span>{item.startDate ? "Dec 16, 2025" : ""}</span>
+                                                <span>-</span>
+                                                <span>{item.dueDate ? "Jan 09, 2026" : ""}</span>
+                                            </div>
+                                        )}
+
+                                        {/* Assignee */}
+                                        {item.assignees && item.assignees[0] && (
+                                            <Avatar className="h-5 w-5 border border-primary-30 shadow-sm">
+                                                <AvatarImage src={item.assignees[0].avatar} />
+                                                <AvatarFallback className="text-[10px] bg-primary-30">
+                                                    {item.assignees[0].name.charAt(0)}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                        )}
+
+                                        {/* Icons */}
+                                        <div className="flex items-center gap-2 text-neutral-40">
+                                            <MessageSquare className="h-3.5 w-3.5" />
+                                            <Eye className="h-3.5 w-3.5" />
+                                            <Paperclip className="h-3.5 w-3.5" />
+                                            <MoreHorizontal className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </div>
+                                    </div>
+                                </div>
                             ))}
+
+                        {/* New Item Placeholder */}
+                        <div className="flex items-center gap-2 px-3 py-2 text-neutral-40 hover:text-neutral transition-colors cursor-pointer group">
+                            <Plus className="h-4 w-4" />
+                            <span className="text-xs font-medium">Novo Item de trabalho</span>
                         </div>
-                    )}
+                    </div>
                 </div>
-
-                {/* State */}
-                <div className="col-span-2 flex items-center">
-                    {item.state && (
-                        <Badge variant="secondary" className="text-xs">
-                            <span
-                                className="w-2 h-2 rounded-full mr-1.5"
-                                style={{ backgroundColor: item.state.color }}
-                            />
-                            {item.state.name}
-                        </Badge>
-                    )}
-                </div>
-
-                {/* Priority */}
-                <div className="col-span-2 flex items-center">
-                    <span className={cn("text-xs", priorityColors[item.priority])}>
-                        {priorityLabels[item.priority]}
-                    </span>
-                </div>
-
-                {/* Assignees */}
-                <div className="col-span-2 flex items-center justify-between">
-                    {item.assignees && item.assignees.length > 0 ? (
-                        <div className="flex -space-x-2">
-                            {item.assignees.slice(0, 3).map((assignee) => (
-                                <Avatar key={assignee.id} className="h-6 w-6 border-2 border-primary-20">
-                                    <AvatarImage src={assignee.avatar} />
-                                    <AvatarFallback className="text-xs">
-                                        {assignee.name.charAt(0)}
-                                    </AvatarFallback>
-                                </Avatar>
-                            ))}
-                        </div>
-                    ) : (
-                        <span className="text-xs text-neutral-40">—</span>
-                    )}
-
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <MoreHorizontal className="h-3.5 w-3.5" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem>Editar</DropdownMenuItem>
-                            <DropdownMenuItem>Duplicar</DropdownMenuItem>
-                            <DropdownMenuItem className="text-danger">Excluir</DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-            </div>
-
-            {/* Children */}
-            {hasChildren &&
-                item.children?.map((child) => (
-                    <ListItem
-                        key={child.id}
-                        item={child}
-                        onItemClick={onItemClick}
-                        onItemComplete={onItemComplete}
-                        depth={depth + 1}
-                    />
-                ))}
-        </>
+            ))}
+        </div>
     );
 }

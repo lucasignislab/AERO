@@ -11,13 +11,6 @@ export default function LoginPage() {
                 </div>
 
                 <LoginForm />
-
-                <p className="text-center text-neutral-30 text-sm">
-                    Não tem uma conta?{" "}
-                    <Link href="/signup" className="text-brand hover:underline">
-                        Criar conta
-                    </Link>
-                </p>
             </div>
         </div>
     );

@@ -1,5 +1,3 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,25 +7,13 @@ export default async function DashboardLayout({
 }: {
     children: React.ReactNode;
 }) {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-        redirect("/login");
-    }
-
-    // Fetch user profile
-    const { data: profile } = await supabase
-        .from("profiles")
-        .select("display_name, avatar_url")
-        .eq("id", user.id)
-        .single();
-
-    // Fetch projects for sidebar
-    const { data: projects } = await supabase
-        .from("projects")
-        .select("id, name, icon, color")
-        .order("created_at", { ascending: false });
+    // Mock data for preview mode
+    const user = { email: "lucas@example.com", id: "mock-user-id" };
+    const profile = { display_name: "Lucas Coelho", avatar_url: undefined };
+    const projects = [
+        { id: "mock-project-1", name: "AERO Frontend", icon: "🚀", color: "#3b82f6" },
+        { id: "mock-project-2", name: "AERO Backend", icon: "⚙️", color: "#ef4444" }
+    ];
 
     return (
         <TooltipProvider>

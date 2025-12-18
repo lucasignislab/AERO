@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -8,7 +7,15 @@ import {
     Settings,
     ArrowLeft,
 } from "lucide-react";
-import { notFound } from "next/navigation";
+
+interface ProjectMock {
+    id: string;
+    name: string;
+    identifier: string;
+    description: string;
+    icon: string;
+    color: string;
+}
 
 export default async function ProjectDetailPage({
     params,
@@ -16,17 +23,27 @@ export default async function ProjectDetailPage({
     params: Promise<{ id: string }>;
 }) {
     const { id } = await params;
-    const supabase = await createClient();
+    // Mock projects for preview
+    const mockProjects: Record<string, ProjectMock> = {
+        "mock-project-1": {
+            id: "mock-project-1",
+            name: "AERO Frontend",
+            identifier: "AERO",
+            description: "Modern project management UI inspired by Linear",
+            icon: "🚀",
+            color: "#3b82f6",
+        },
+        "mock-project-2": {
+            id: "mock-project-2",
+            name: "AERO Backend",
+            identifier: "BE",
+            description: "Scalable backend services for AERO",
+            icon: "⚙️",
+            color: "#ef4444",
+        }
+    };
 
-    const { data: project } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-    if (!project) {
-        notFound();
-    }
+    const project = mockProjects[id] || mockProjects["mock-project-1"];
 
     const navItems = [
         { href: `/projects/${id}/work-items`, label: "Work Items", icon: FolderKanban },

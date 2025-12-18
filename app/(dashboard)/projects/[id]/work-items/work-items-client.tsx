@@ -13,13 +13,13 @@ import { useWorkItems, useIssueStates } from "@/lib/hooks";
 import {
     LayoutGrid,
     List,
-    Plus,
     Filter,
     SlidersHorizontal,
     Calendar,
     Table2,
     GanttChart,
     Loader2,
+    ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -40,42 +40,23 @@ export default function WorkItemsClient() {
     const { items, isLoading, createItem } = useWorkItems(projectId);
     const { states } = useIssueStates(projectId);
 
-    const [view, setView] = useState<ViewType>("kanban");
+    const [view, setView] = useState<ViewType>("list");
     const [modalOpen, setModalOpen] = useState(false);
 
-    // Transform items into kanban columns by state
-    const columns = states.map(state => ({
-        id: state.id,
-        name: state.name,
-        color: state.color,
-        items: items
-            .filter(item => item.state_id === state.id)
-            .map(item => ({
-                id: item.id,
-                identifier: item.identifier,
-                title: item.title,
-                priority: item.priority,
-                labels: item.labels,
-            })),
-    }));
-
-    // Transform items for list/calendar/table/timeline views
     const viewItems = items.map(item => ({
         id: item.id,
         identifier: item.identifier,
         title: item.title,
         priority: item.priority,
-        state: item.state || { id: item.state_id || "", name: "Backlog", color: "#737373" },
+        state: item.state || states.find(s => s.id === item.state_id) || { id: item.state_id || "", name: "Backlog", color: "#737373", group_name: "backlog" as const },
         dueDate: item.due_date || undefined,
         startDate: item.start_date || undefined,
         labels: item.labels,
-        assignees: item.assignee_ids?.map(id => ({ id, name: "Membro" })) || [],
-        estimate: 0,
+        assignees: item.assignee_ids?.map(id => ({ id, name: "Lucas Coelho" })) || [],
     }));
 
     const handleItemClick = (item: { id: string }) => {
         console.log("Item clicked:", item.id);
-        // TODO: Open item detail modal
     };
 
     const handleCreateItem = async (data: { title: string; state_id?: string }) => {
@@ -100,44 +81,70 @@ export default function WorkItemsClient() {
 
     return (
         <div className="h-full flex flex-col">
-            {/* Toolbar */}
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                    {/* View Switcher */}
-                    <div className="flex bg-primary-20 rounded-lg p-1">
+            {/* Project Context & Toolbar */}
+            <div className="flex items-center justify-between py-2 border-b border-primary-30 mb-4">
+                <div className="flex items-center gap-1">
+                    {/* Project Breadcrumb */}
+                    <div className="flex items-center gap-2 mr-4">
+                        <button className="p-1.5 hover:bg-primary-20 rounded-md text-neutral-40">
+                            <List className="h-4 w-4 rotate-90" /> {/* Sidebar toggle mock */}
+                        </button>
+                        <ChevronRight className="h-3 w-3 text-neutral-40" />
+                        <div className="flex items-center gap-1.5 px-1.5 py-1 hover:bg-primary-20 rounded-md cursor-pointer transition-colors">
+                            <span className="text-sm">🚀</span>
+                            <span className="text-sm font-medium text-neutral-30 truncate max-w-[150px]">
+                                AERO Frontend
+                            </span>
+                        </div>
+                        <ChevronRight className="h-3 w-3 text-neutral-40" />
+                        <div className="flex items-center gap-2 px-1.5 py-1 hover:bg-primary-20 rounded-md cursor-pointer transition-colors">
+                            <span className="text-sm font-medium text-neutral">Work Items</span>
+                            <span className="bg-info-20 text-info text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                                {items.length}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* View Switcher Icons */}
+                    <div className="flex bg-primary-20/50 rounded-md p-1 border border-primary-30 mr-2">
                         {viewOptions.map((option) => (
                             <button
                                 key={option.id}
                                 onClick={() => setView(option.id)}
                                 className={cn(
-                                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors",
+                                    "p-1.5 rounded-md transition-all",
                                     view === option.id
-                                        ? "bg-primary-10 text-neutral"
-                                        : "text-neutral-30 hover:text-neutral"
+                                        ? "bg-primary-10 text-neutral shadow-sm"
+                                        : "text-neutral-40 hover:text-neutral"
                                 )}
                                 title={option.label}
                             >
                                 <option.icon className="h-4 w-4" />
-                                <span className="hidden sm:inline">{option.label}</span>
                             </button>
                         ))}
                     </div>
 
                     {/* Filters */}
-                    <Button variant="outline" size="sm" className="gap-2">
+                    <Button variant="ghost" size="sm" className="text-neutral-40 hover:text-neutral hover:bg-primary-20 gap-1.5">
                         <Filter className="h-3.5 w-3.5" />
-                        Filtros
                     </Button>
 
-                    <Button variant="outline" size="sm" className="gap-2">
+                    <Button variant="ghost" size="sm" className="text-neutral-40 hover:text-neutral hover:bg-primary-20 gap-1.5 ml-1">
+                        <span className="text-xs">Exibir</span>
                         <SlidersHorizontal className="h-3.5 w-3.5" />
-                        Exibir
+                    </Button>
+
+                    <Button variant="ghost" size="sm" className="text-neutral-40 hover:text-neutral hover:bg-primary-20 text-xs ml-1 px-3">
+                        Análises
                     </Button>
                 </div>
 
-                <Button onClick={() => setModalOpen(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nova Tarefa
+                <Button
+                    size="sm"
+                    className="bg-[#0070E0] hover:bg-[#0070E0]/90 text-white rounded-md px-3 py-1.5 h-auto text-xs font-semibold"
+                    onClick={() => setModalOpen(true)}
+                >
+                    Adicionar item de trabalho
                 </Button>
             </div>
 
@@ -145,12 +152,20 @@ export default function WorkItemsClient() {
             <div className="flex-1 min-h-0">
                 {view === "kanban" && (
                     <KanbanBoard
-                        columns={columns.length > 0 ? columns : [
-                            { id: "backlog", name: "Backlog", color: "#737373", items: [] },
-                            { id: "todo", name: "Todo", color: "#388cfa", items: [] },
-                            { id: "in-progress", name: "Em Progresso", color: "#A35A01", items: [] },
-                            { id: "done", name: "Concluído", color: "#18821C", items: [] },
-                        ]}
+                        columns={states.map(state => ({
+                            id: state.id,
+                            name: state.name,
+                            color: state.color,
+                            items: items
+                                .filter(item => item.state_id === state.id)
+                                .map(item => ({
+                                    id: item.id,
+                                    identifier: item.identifier,
+                                    title: item.title,
+                                    priority: item.priority,
+                                    labels: item.labels,
+                                })),
+                        }))}
                         onAddItem={(columnId) => {
                             console.log("Add item to column:", columnId);
                             setModalOpen(true);
