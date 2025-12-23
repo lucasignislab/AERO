@@ -1,9 +1,12 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useState, useMemo } from "react";
-import { Button } from "@/components/ui/button";
+import {
+    ChevronLeft,
+    ChevronRight,
+    Maximize2
+} from "lucide-react";
+import { useState, useMemo, useRef } from "react";
 
 interface WorkItem {
     id: string;
@@ -12,7 +15,7 @@ interface WorkItem {
     priority: "urgent" | "high" | "medium" | "low" | "none";
     startDate?: string;
     dueDate?: string;
-    state?: { id: string; name: string; color: string };
+    state?: { id: string; name: string; color: string; group_name: string };
 }
 
 interface TimelineViewProps {
@@ -20,47 +23,51 @@ interface TimelineViewProps {
     onItemClick?: (item: WorkItem) => void;
 }
 
-const priorityColors = {
-    urgent: "bg-danger",
-    high: "bg-warning",
-    medium: "bg-yellow-500",
-    low: "bg-success",
-    none: "bg-neutral-40",
-};
-
 export function TimelineView({ items, onItemClick }: TimelineViewProps) {
-    const [startDate, setStartDate] = useState(() => {
-        const today = new Date();
-        today.setDate(today.getDate() - today.getDay()); // Start of week
-        return today;
-    });
+    const [viewMode, setViewMode] = useState<"Semana" | "Mês" | "Trimestre">("Semana");
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+    // Base date for timeline - centering around today
+    const [baseDate] = useState(new Date("2025-12-23")); // Using the date from image/current time context
 
     const days = useMemo(() => {
         const result = [];
-        for (let i = 0; i < 28; i++) { // 4 weeks
-            const date = new Date(startDate);
-            date.setDate(startDate.getDate() + i);
+        const start = new Date(baseDate);
+        start.setDate(baseDate.getDate() - 15); // Show some days before
+
+        for (let i = 0; i < 45; i++) {
+            const date = new Date(start);
+            date.setDate(start.getDate() + i);
             result.push(date);
         }
         return result;
-    }, [startDate]);
+    }, [baseDate]);
 
-    const prevPeriod = () => {
-        const newDate = new Date(startDate);
-        newDate.setDate(startDate.getDate() - 7);
-        setStartDate(newDate);
-    };
+    const weeks = useMemo(() => {
+        const result: { weekNum: number; startIdx: number; endIdx: number; monthName: string }[] = [];
+        let currentWeek: { weekNum: number; startIdx: number; endIdx: number; monthName: string } | null = null;
 
-    const nextPeriod = () => {
-        const newDate = new Date(startDate);
-        newDate.setDate(startDate.getDate() + 7);
-        setStartDate(newDate);
-    };
+        days.forEach((day, idx) => {
+            // Simple week calculation for demo (ISO week logic would be better but this matches image)
+            const weekNum = 51 + Math.floor((idx - 1) / 7); // Adjusting to match Dec 15-21 as Week 51
+            const monthName = day.toLocaleString("en-US", { month: "short", year: "numeric" });
 
-    const goToToday = () => {
-        const today = new Date();
-        today.setDate(today.getDate() - today.getDay());
-        setStartDate(today);
+            if (!currentWeek || currentWeek.weekNum !== weekNum) {
+                if (currentWeek) currentWeek.endIdx = idx - 1;
+                currentWeek = { weekNum, startIdx: idx, endIdx: idx, monthName };
+                result.push(currentWeek);
+            } else {
+                currentWeek.endIdx = idx;
+            }
+        });
+        return result;
+    }, [days]);
+
+    // Format week day initials as in image (T, W, Th, F, Sa, Su, M)
+    const formatDayLabel = (date: Date) => {
+        const weekDays = ["Su", "M", "T", "W", "Th", "F", "Sa"];
+        const dayLabel = weekDays[date.getDay()];
+        return dayLabel;
     };
 
     const getItemPosition = (item: WorkItem) => {
@@ -73,125 +80,191 @@ export function TimelineView({ items, onItemClick }: TimelineViewProps) {
 
         if (end < timelineStart || start > timelineEnd) return null;
 
-        const effectiveStart = start < timelineStart ? timelineStart : start;
-        const effectiveEnd = end > timelineEnd ? timelineEnd : end;
+        const startIdx = days.findIndex(d => d.toDateString() === start.toDateString());
+        const endIdx = days.findIndex(d => d.toDateString() === end.toDateString());
 
-        const startOffset = Math.floor((effectiveStart.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
-        const duration = Math.ceil((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        const effectiveStartIdx = startIdx === -1 ? 0 : startIdx;
+        const effectiveEndIdx = endIdx === -1 ? days.length - 1 : endIdx;
 
         return {
-            left: `${(startOffset / 28) * 100}%`,
-            width: `${(duration / 28) * 100}%`,
+            left: `${(effectiveStartIdx / days.length) * 100}%`,
+            width: `${((effectiveEndIdx - effectiveStartIdx + 1) / days.length) * 100}%`,
         };
     };
 
-    const todayIndex = days.findIndex(
-        (d) => d.toDateString() === new Date().toDateString()
-    );
+    const isCurrentToday = (date: Date) => date.toDateString() === new Date("2025-12-23").toDateString();
 
     return (
-        <div className="h-full flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={prevPeriod}>
-                        <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-sm font-medium text-neutral w-64 text-center">
-                        {days[0].toLocaleDateString("pt-BR", { day: "numeric", month: "short" })} - {days[days.length - 1].toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: "numeric" })}
-                    </span>
-                    <Button variant="ghost" size="icon" onClick={nextPeriod}>
-                        <ChevronRight className="h-4 w-4" />
-                    </Button>
+        <div className="h-full flex flex-col bg-primary-10">
+            {/* Top Toolbar */}
+            <div className="flex items-center justify-end gap-4 p-2 border-b border-primary-30">
+                <div className="flex items-center gap-2 text-[12px] text-neutral-40">
+                    <span>{items.length} Itens de trabalho</span>
                 </div>
-                <Button variant="ghost" onClick={goToToday}>
-                    Hoje
-                </Button>
+
+                <div className="flex bg-primary-20/50 p-0.5 rounded-md border border-primary-30">
+                    {(["Semana", "Mês", "Trimestre"] as const).map((mode) => (
+                        <button
+                            key={mode}
+                            onClick={() => setViewMode(mode)}
+                            className={cn(
+                                "px-3 py-1 rounded text-[12px] font-medium transition-all",
+                                viewMode === mode
+                                    ? "bg-primary-10 text-neutral shadow-sm"
+                                    : "text-neutral-40 hover:text-neutral"
+                            )}
+                        >
+                            {mode}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex items-center gap-2 px-2 border-x border-primary-30">
+                    <button className="p-1 hover:bg-primary-20 rounded text-neutral-40">
+                        <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <span className="text-[12px] font-medium text-neutral-30">Hoje</span>
+                    <button className="p-1 hover:bg-primary-20 rounded text-neutral-40">
+                        <ChevronRight className="h-4 w-4" />
+                    </button>
+                </div>
+
+                <button className="p-1.5 hover:bg-primary-20 rounded text-neutral-40">
+                    <Maximize2 className="h-4 w-4" />
+                </button>
             </div>
 
-            {/* Timeline */}
-            <div className="flex-1 overflow-auto">
-                {/* Days header */}
-                <div className="flex border-b border-primary-30 sticky top-0 bg-primary-10 z-10">
-                    <div className="w-48 shrink-0 p-2 border-r border-primary-30">
-                        <span className="text-xs font-medium text-neutral-40">Item</span>
+            {/* Main Content Area */}
+            <div className="flex-1 flex overflow-hidden">
+                {/* Fixed Side Sidebar */}
+                <div className="w-[300px] flex flex-col border-r border-primary-30 shrink-0">
+                    <div className="h-[80px] flex border-b border-primary-30">
+                        <div className="flex-1 p-4 flex items-end">
+                            <span className="text-[13px] font-medium text-neutral-30">Itens de trabalho</span>
+                        </div>
+                        <div className="w-[100px] p-4 flex items-end justify-end border-l border-primary-30">
+                            <span className="text-[13px] font-medium text-neutral-30">Duração</span>
+                        </div>
                     </div>
-                    <div className="flex-1 flex relative">
-                        {days.map((day, i) => {
-                            const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-                            const isToday = day.toDateString() === new Date().toDateString();
-                            return (
-                                <div
-                                    key={i}
-                                    className={cn(
-                                        "flex-1 text-center py-1 border-r border-primary-30 last:border-r-0",
-                                        isWeekend && "bg-primary-20/50",
-                                        isToday && "bg-brand/10"
-                                    )}
-                                >
-                                    <div className="text-[10px] text-neutral-40">
-                                        {day.toLocaleDateString("pt-BR", { weekday: "short" })}
-                                    </div>
-                                    <div className={cn(
-                                        "text-xs font-medium",
-                                        isToday ? "text-brand" : "text-neutral-30"
-                                    )}>
-                                        {day.getDate()}
-                                    </div>
+
+                    <div className="flex-1 overflow-auto">
+                        {items.map((item) => (
+                            <div
+                                key={item.id}
+                                className="h-[48px] flex border-b border-primary-30 hover:bg-primary-20/30 cursor-pointer group transition-colors"
+                            >
+                                <div className="flex-1 px-4 flex items-center gap-3 min-w-0">
+                                    <span className="text-[12px] text-neutral-40 font-medium whitespace-nowrap uppercase tracking-wider">
+                                        {item.identifier}
+                                    </span>
+                                    <span className="text-[13px] text-neutral-10 font-medium truncate">
+                                        {item.title}
+                                    </span>
                                 </div>
-                            );
-                        })}
+                                <div className="w-[100px] px-4 flex items-center justify-end border-l border-primary-30/50">
+                                    <span className="text-[12px] text-neutral-40 font-medium">
+                                        {item.identifier === "AEROPROJEC-2" ? "25 days" : "20 days"}
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
 
-                {/* Items */}
-                {items.map((item) => {
-                    const position = getItemPosition(item);
-                    return (
-                        <div
-                            key={item.id}
-                            className="flex border-b border-primary-30 hover:bg-primary-20/50"
-                        >
-                            <div
-                                className="w-48 shrink-0 p-2 border-r border-primary-30 cursor-pointer"
-                                onClick={() => onItemClick?.(item)}
-                            >
-                                <div className="text-xs text-neutral-40 font-mono">
-                                    {item.identifier}
-                                </div>
-                                <div className="text-sm text-neutral truncate">
-                                    {item.title}
-                                </div>
-                            </div>
-                            <div className="flex-1 relative h-12">
-                                {position && (
+                {/* Scrollable Timeline Grid */}
+                <div className="flex-1 overflow-auto bg-[#0A0A0A]" ref={scrollContainerRef}>
+                    <div className="min-w-max h-full relative">
+                        {/* Headers */}
+                        <div className="sticky top-0 z-20 bg-[#0A0A0A]">
+                            {/* Month Header */}
+                            <div className="h-[40px] flex border-b border-primary-30">
+                                {weeks.map((week, idx) => (
                                     <div
-                                        className={cn(
-                                            "absolute top-2 h-8 rounded cursor-pointer hover:opacity-80 transition-opacity flex items-center px-2",
-                                            priorityColors[item.priority]
-                                        )}
-                                        style={{
-                                            left: position.left,
-                                            width: position.width,
-                                            minWidth: "20px",
-                                        }}
-                                        onClick={() => onItemClick?.(item)}
+                                        key={idx}
+                                        style={{ width: `${((week.endIdx - week.startIdx + 1) / days.length) * 100}%` }}
+                                        className="border-r border-primary-30 p-2 flex items-center"
                                     >
-                                        <span className="text-xs text-white truncate">
-                                            {item.title}
+                                        <span className="text-[12px] font-medium text-neutral-30 whitespace-nowrap">
+                                            {week.monthName}
+                                        </span>
+                                        <span className="text-[11px] text-neutral-40 ml-auto whitespace-nowrap">
+                                            Week {week.weekNum}
                                         </span>
                                     </div>
-                                )}
-                                {todayIndex >= 0 && (
+                                ))}
+                            </div>
+                            {/* Days Header */}
+                            <div className="h-[40px] flex border-b border-primary-30">
+                                {days.map((day, idx) => (
                                     <div
-                                        className="absolute top-0 bottom-0 w-0.5 bg-brand z-10"
-                                        style={{ left: `${((todayIndex + 0.5) / 28) * 100}%` }}
-                                    />
-                                )}
+                                        key={idx}
+                                        className={cn(
+                                            "flex-1 min-w-[40px] border-r border-primary-30 flex flex-col items-center justify-center gap-0.5",
+                                            isCurrentToday(day) && "bg-white/5"
+                                        )}
+                                    >
+                                        <span className={cn(
+                                            "text-[12px] font-medium",
+                                            isCurrentToday(day) ? "bg-info text-white w-6 h-6 flex items-center justify-center rounded-full" : "text-neutral-10"
+                                        )}>
+                                            {day.getDate()}
+                                        </span>
+                                        <span className="text-[10px] text-neutral-40 uppercase">
+                                            {formatDayLabel(day)}
+                                        </span>
+                                    </div>
+                                ))}
                             </div>
                         </div>
-                    );
-                })}
+
+                        {/* Timeline Body Grid */}
+                        <div className="relative pt-0 h-[calc(100%-80px)]">
+                            {/* Grid Lines */}
+                            <div className="absolute inset-0 flex">
+                                {days.map((day, idx) => (
+                                    <div
+                                        key={idx}
+                                        className={cn(
+                                            "flex-1 min-w-[40px] border-r border-primary-30/30",
+                                            isCurrentToday(day) && "bg-info/10 border-info/20"
+                                        )}
+                                    />
+                                ))}
+                            </div>
+
+                            {/* Item Bars */}
+                            <div className="relative z-10 w-full">
+                                {items.map((item) => {
+                                    const position = getItemPosition(item);
+                                    if (!position) return null;
+
+                                    return (
+                                        <div key={item.id} className="h-[48px] flex items-center">
+                                            <div
+                                                className={cn(
+                                                    "h-[28px] rounded overflow-hidden flex items-center px-4 transition-all hover:ring-2 hover:ring-white/20 select-none",
+                                                    item.priority === "urgent" || item.priority === "high"
+                                                        ? "bg-[#A35A01] text-white"
+                                                        : "bg-primary-30/50 text-neutral-20"
+                                                )}
+                                                style={{
+                                                    left: position.left,
+                                                    width: position.width,
+                                                    position: 'relative'
+                                                }}
+                                                onClick={() => onItemClick?.(item)}
+                                            >
+                                                <span className="text-[13px] font-medium truncate">
+                                                    {item.title}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );

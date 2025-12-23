@@ -40,7 +40,7 @@ export default function WorkItemsClient() {
     const { items, isLoading, createItem } = useWorkItems(projectId);
     const { states } = useIssueStates(projectId);
 
-    const [view, setView] = useState<ViewType>("list");
+    const [view, setView] = useState<ViewType>("timeline");
     const [modalOpen, setModalOpen] = useState(false);
 
     const viewItems = items.map(item => ({

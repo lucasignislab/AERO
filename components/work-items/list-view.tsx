@@ -1,22 +1,17 @@
 "use client";
 
 import {
-    ChevronDown,
-    ChevronRight,
-    Circle,
-    CircleDot,
-    CheckCircle2,
-    XCircle,
     Plus,
-    MoreHorizontal,
-    MessageSquare,
-    Eye,
-    Paperclip,
+    Calendar,
+    Circle,
+    CheckCircle2,
     AlertCircle,
-    SignalHigh,
-    SignalMedium,
-    SignalLow,
-    CircleSlash,
+    Signal,
+    History as HistoryIcon,
+    Paperclip,
+    MoreHorizontal,
+    Clipboard,
+    Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -38,36 +33,20 @@ interface ListViewProps {
     onItemClick?: (item: WorkItem) => void;
 }
 
-const StateIcon = ({ group, color }: { group: string; color: string }) => {
-    switch (group) {
-        case "backlog":
-            return <Circle className="h-4 w-4 text-neutral-40" />;
-        case "unstarted":
-            return <Circle className="h-4 w-4 text-white" />;
-        case "started":
-            return <CircleDot className="h-4 w-4 text-warning" />;
-        case "completed":
-            return <CheckCircle2 className="h-4 w-4 text-success" />;
-        case "cancelled":
-            return <XCircle className="h-4 w-4 text-neutral-40" />;
-        default:
-            return <Circle className="h-4 w-4" style={{ color }} />;
-    }
+const priorityIcons = {
+    urgent: { icon: AlertCircle, color: "text-danger" },
+    high: { icon: Signal, color: "text-warning" },
+    medium: { icon: Signal, color: "text-info" },
+    low: { icon: Signal, color: "text-success" },
+    none: { icon: Circle, color: "text-neutral-40" },
 };
 
-const PriorityIcon = ({ priority }: { priority: string }) => {
-    switch (priority) {
-        case "urgent":
-            return <AlertCircle className="h-3.5 w-3.5 text-danger" />;
-        case "high":
-            return <SignalHigh className="h-3.5 w-3.5 text-warning" />;
-        case "medium":
-            return <SignalMedium className="h-3.5 w-3.5 text-info" />;
-        case "low":
-            return <SignalLow className="h-3.5 w-3.5 text-success" />;
-        default:
-            return <CircleSlash className="h-3.5 w-3.5 text-neutral-40" />;
-    }
+const stateIcons: Record<string, { icon: React.ComponentType<{ className?: string }>; color: string }> = {
+    backlog: { icon: Circle, color: "text-neutral-40" },
+    unstarted: { icon: Circle, color: "text-neutral-30" },
+    started: { icon: HistoryIcon, color: "text-warning" },
+    completed: { icon: CheckCircle2, color: "text-success" },
+    cancelled: { icon: AlertCircle, color: "text-neutral-40" },
 };
 
 export function ListView({ items, onItemClick }: ListViewProps) {
@@ -84,19 +63,22 @@ export function ListView({ items, onItemClick }: ListViewProps) {
             {states.map((state) => (
                 <div key={state.id} className="space-y-1">
                     {/* State Header */}
-                    <div className="flex items-center justify-between group px-2 py-1">
+                    <div className="flex items-center justify-between group px-2 py-1 cursor-pointer hover:bg-primary-20/30 rounded-lg transition-colors">
                         <div className="flex items-center gap-2">
-                            <StateIcon group={state.group_name} color={state.color} />
+                            {(() => {
+                                const StateIcon = stateIcons[state.group_name]?.icon || Circle;
+                                return <StateIcon className={cn("h-4 w-4", stateIcons[state.group_name]?.color || "text-neutral-40")} />;
+                            })()}
                             <span className="text-sm font-semibold text-neutral">
                                 {state.name}
                             </span>
-                            <span className="text-xs text-neutral-40">
+                            <span className="text-sm font-medium text-neutral-40 ml-1">
                                 {items.filter(i => i.state.id === state.id).length}
                             </span>
                         </div>
-                        <button className="opacity-0 group-hover:opacity-100 p-1 hover:bg-primary-20 rounded transition-opacity">
-                            <Plus className="h-4 w-4 text-neutral-40" />
-                        </button>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Plus className="h-4 w-4 text-neutral-40 hover:text-neutral transition-colors" />
+                        </div>
                     </div>
 
                     {/* Items List */}
@@ -107,13 +89,13 @@ export function ListView({ items, onItemClick }: ListViewProps) {
                                 <div
                                     key={item.id}
                                     onClick={() => onItemClick?.(item)}
-                                    className="flex items-center gap-4 px-3 py-2.5 hover:bg-primary-20/50 group cursor-pointer border-y border-transparent hover:border-primary-30 transition-all rounded-md"
+                                    className="flex items-center justify-between gap-4 px-3 py-2.5 hover:bg-primary-20/50 group cursor-pointer border-y border-transparent transition-all"
                                 >
                                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                                        <span className="text-xs font-medium text-neutral-40 w-24 flex-shrink-0">
+                                        <span className="text-[10px] font-medium text-neutral-40 uppercase tracking-wider w-24 flex-shrink-0">
                                             {item.identifier}
                                         </span>
-                                        <span className="text-sm text-neutral truncate font-medium">
+                                        <span className="text-[13px] text-neutral-10 font-medium truncate">
                                             {item.title}
                                         </span>
                                     </div>
@@ -121,24 +103,30 @@ export function ListView({ items, onItemClick }: ListViewProps) {
                                     {/* Item Meta */}
                                     <div className="flex items-center gap-3 flex-shrink-0">
                                         {/* Status Badge */}
-                                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary-20/50 border border-primary-30">
-                                            <StateIcon group={item.state.group_name} color={item.state.color} />
-                                            <span className="text-[10px] font-medium text-neutral-30">
-                                                {item.state.name}
-                                            </span>
+                                        <div className="flex items-center gap-1.5 px-2 py-1 bg-primary-20/50 rounded border border-primary-30 text-[11px] text-neutral-20">
+                                            {(() => {
+                                                const StateIcon = stateIcons[state.group_name]?.icon || Circle;
+                                                return <StateIcon className={cn("h-3 w-3", stateIcons[state.group_name]?.color || "text-neutral-40")} />;
+                                            })()}
+                                            {state.name}
                                         </div>
 
                                         {/* Priority */}
-                                        <div className="p-1 rounded bg-primary-20/50 border border-primary-30">
-                                            <PriorityIcon priority={item.priority} />
+                                        <div className="p-1 bg-primary-20/50 rounded border border-primary-30 text-neutral-40">
+                                            {(() => {
+                                                const PriorityIcon = priorityIcons[item.priority]?.icon || Circle;
+                                                return <PriorityIcon className={cn("h-3 w-3", priorityIcons[item.priority]?.color || "text-neutral-40")} />;
+                                            })()}
                                         </div>
 
                                         {/* Date */}
                                         {(item.startDate || item.dueDate) && (
-                                            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-primary-20/50 border border-primary-30 text-[10px] text-neutral-30">
+                                            <div className="flex items-center gap-1.5 px-2 py-1 bg-primary-20/50 rounded border border-primary-30 text-[11px] text-neutral-30">
+                                                <Calendar className="h-3 w-3" />
                                                 <span>{item.startDate ? "Dec 16, 2025" : ""}</span>
-                                                <span>-</span>
+                                                <span className="mx-0.5">-</span>
                                                 <span>{item.dueDate ? "Jan 09, 2026" : ""}</span>
+                                                <button className="ml-1 hover:text-neutral-10 text-[8px]">×</button>
                                             </div>
                                         )}
 
@@ -154,8 +142,14 @@ export function ListView({ items, onItemClick }: ListViewProps) {
 
                                         {/* Icons */}
                                         <div className="flex items-center gap-2 text-neutral-40">
-                                            <MessageSquare className="h-3.5 w-3.5" />
-                                            <Eye className="h-3.5 w-3.5" />
+                                            <Clipboard className="h-3.5 w-3.5" />
+                                            <Clock className="h-3.5 w-3.5" />
+                                            {item.labels?.map((label) => (
+                                                <div key={label.id} className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary-20/50 border border-primary-30 text-[10px]">
+                                                    <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: label.color }} />
+                                                    <span>{label.name}</span>
+                                                </div>
+                                            ))}
                                             <Paperclip className="h-3.5 w-3.5" />
                                             <MoreHorizontal className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
                                         </div>

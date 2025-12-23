@@ -169,7 +169,7 @@ export function useWorkItems(projectId: string | null): UseWorkItemsReturn {
                     title: "teste 1.1",
                     description: null,
                     state_id: "state-in-progress",
-                    priority: "high",
+                    priority: "urgent",
                     assignee_ids: ["mock-user-id"],
                     created_by_id: "mock-user-id",
                     label_ids: ["label-teste"],
@@ -183,7 +183,34 @@ export function useWorkItems(projectId: string | null): UseWorkItemsReturn {
                     is_draft: false,
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString(),
-                    completed_at: null
+                    completed_at: null,
+                    state: { id: "state-in-progress", project_id: projectId, name: "In Progress", description: null, color: "#F59E0B", group_name: "started", sort_order: 2, is_default: false },
+                    labels: [{ id: "label-teste", project_id: projectId, name: "Teste", description: null, color: "#F59E0B" }]
+                },
+                {
+                    id: "item-2",
+                    project_id: projectId,
+                    identifier: "AEROPROJEC-1",
+                    type_id: null,
+                    title: "teste",
+                    description: null,
+                    state_id: "state-todo",
+                    priority: "high",
+                    assignee_ids: [],
+                    created_by_id: "mock-user-id",
+                    label_ids: [],
+                    due_date: "2025-12-31",
+                    start_date: "2025-12-12",
+                    cycle_id: null,
+                    module_ids: [],
+                    epic_id: null,
+                    parent_id: null,
+                    sort_order: 0,
+                    is_draft: false,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    completed_at: null,
+                    state: { id: "state-todo", project_id: projectId, name: "Todo", description: null, color: "#FFFFFF", group_name: "unstarted", sort_order: 1, is_default: true }
                 }
             ]);
             setError(err as Error);
@@ -365,7 +392,7 @@ export function useIssueStates(projectId: string | null) {
                 return;
             }
             setStates(data);
-        } catch (err) {
+        } catch {
             setStates([
                 { id: "state-backlog", project_id: projectId, name: "Backlog", description: null, color: "#737373", group_name: "backlog", sort_order: 0, is_default: true },
             ]);

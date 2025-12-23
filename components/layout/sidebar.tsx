@@ -203,7 +203,7 @@ export function Sidebar({ user, workspaceName = "Projects", projects = [] }: Sid
                                             {projectSubItems.map((subItem) => (
                                                 <Link
                                                     key={subItem.href}
-                                                    href={`/projects/${project.id}/${subItem.href}`}
+                                                    href={`/projects/${project.id}/${subItem.href === "items" ? "work-items" : subItem.href}`}
                                                     className={cn(
                                                         "flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors",
                                                         pathname.includes(`/projects/${project.id}/${subItem.href}`)
