@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { CommandPalette } from "@/components/layout/command-palette";
+import { Providers } from "@/components/providers";
+
 
 const inter = Inter({
   variable: "--font-inter",
@@ -28,8 +30,10 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
-        {children}
-        <CommandPalette />
+        <Providers>
+          {children}
+          <CommandPalette />
+        </Providers>
       </body>
     </html>
   );

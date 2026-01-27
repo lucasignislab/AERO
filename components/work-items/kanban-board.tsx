@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -57,15 +57,116 @@ const stateIcons: Record<string, { icon: React.ComponentType<{ className?: strin
     cancelled: { icon: AlertCircle, color: "text-neutral-40" },
 };
 
+const KanbanItem = memo(({
+    item,
+    columnName,
+    isDragged,
+    onDragStart,
+    onDragEnd,
+    onClick
+}: {
+    item: WorkItem;
+    columnName: string;
+    isDragged: boolean;
+    onDragStart: () => void;
+    onDragEnd: () => void;
+    onClick: () => void;
+}) => {
+    return (
+        <div
+            draggable
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onClick={onClick}
+            className={cn(
+                "bg-[#1A1C23] border border-primary-30 rounded-lg p-4 cursor-pointer shadow-sm",
+                "hover:border-neutral-40 transition-colors group",
+                isDragged && "opacity-50"
+            )}
+        >
+            <div className="space-y-3">
+                {/* ID & Title */}
+                <div className="space-y-1">
+                    <span className="text-[10px] font-medium text-neutral-40 uppercase tracking-wider">
+                        {item.identifier}
+                    </span>
+                    <p className="text-[13px] text-neutral-10 font-medium leading-tight">
+                        {item.title}
+                    </p>
+                </div>
+
+                {/* Badges Row */}
+                <div className="flex flex-wrap items-center gap-2">
+                    {/* Status */}
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-primary-20/50 rounded border border-primary-30 text-[11px] text-neutral-20">
+                        {stateIcons[columnName.toLowerCase()] ? (
+                            (() => {
+                                const StateIcon = stateIcons[columnName.toLowerCase()].icon;
+                                return <StateIcon className={cn("h-3 w-3", stateIcons[columnName.toLowerCase()].color)} />;
+                            })()
+                        ) : (
+                            <Circle className="h-3 w-3 text-neutral-40" />
+                        )}
+                        {columnName}
+                    </div>
+
+                    {/* Priority */}
+                    <div className="p-1 bg-primary-20/50 rounded border border-primary-30">
+                        {priorityIcons[item.priority] && (() => {
+                            const PriorityIcon = priorityIcons[item.priority].icon;
+                            return <PriorityIcon className={cn("h-3 w-3", priorityIcons[item.priority].color)} />;
+                        })()}
+                    </div>
+
+                    {/* Date */}
+                    {(item.startDate || item.dueDate) && (
+                        <div className="flex items-center gap-1.5 px-2 py-1 bg-primary-20/50 rounded border border-primary-30 text-[11px] text-neutral-30">
+                            <Calendar className="h-3 w-3" />
+                            <span>
+                                {item.startDate ? "Dec 16, 2025" : ""} {item.dueDate ? "- Jan 09, 2026" : ""}
+                            </span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer Icons & Assignee */}
+                <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-center gap-2">
+                        <Paperclip className="h-3.5 w-3.5 text-neutral-40" />
+                        {item.labels && item.labels.length > 0 && (
+                            <div className="flex items-center gap-1 py-0.5 px-1.5 bg-primary-20/50 rounded border border-primary-30 text-[11px] text-neutral-30">
+                                <Circle className="h-2 w-2 fill-current" style={{ color: item.labels[0].color }} />
+                                {item.labels[0].name}
+                            </div>
+                        )}
+                        <Plus className="h-3.5 w-3.5 text-neutral-40" />
+                    </div>
+
+                    {item.assignees && item.assignees.length > 0 && (
+                        <Avatar className="h-5 w-5 border border-primary-30">
+                            <AvatarImage src={item.assignees[0].avatar} />
+                            <AvatarFallback className="text-[10px] bg-primary-30">
+                                {item.assignees[0].name.charAt(0)}
+                            </AvatarFallback>
+                        </Avatar>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+});
+
+KanbanItem.displayName = "KanbanItem";
+
 export function KanbanBoard({ columns, onItemClick, onAddItem }: KanbanBoardProps) {
-    const [draggedItem, setDraggedItem] = useState<WorkItem | null>(null);
+    const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
 
     return (
         <div className="flex gap-4 h-full overflow-x-auto pb-4 scrollbar-hide">
             {columns.map((column) => (
                 <div
                     key={column.id}
-                    className="flex-shrink-0 w-[350px] flex flex-col"
+                    className="shrink-0 w-[350px] flex flex-col"
                 >
                     {/* Column Header */}
                     <div className="p-3 flex items-center gap-2 group/header">
@@ -100,102 +201,15 @@ export function KanbanBoard({ columns, onItemClick, onAddItem }: KanbanBoardProp
                     {/* Column Items */}
                     <div className="flex-1 overflow-y-auto p-2 space-y-3 min-h-0">
                         {column.items.map((item) => (
-                            <div
+                            <KanbanItem
                                 key={item.id}
-                                draggable
-                                onDragStart={() => setDraggedItem(item)}
-                                onDragEnd={() => setDraggedItem(null)}
+                                item={item}
+                                columnName={column.name}
+                                isDragged={draggedItemId === item.id}
+                                onDragStart={() => setDraggedItemId(item.id)}
+                                onDragEnd={() => setDraggedItemId(null)}
                                 onClick={() => onItemClick?.(item)}
-                                className={cn(
-                                    "bg-[#1A1C23] border border-primary-30 rounded-lg p-4 cursor-pointer shadow-sm",
-                                    "hover:border-neutral-40 transition-colors group",
-                                    draggedItem?.id === item.id && "opacity-50"
-                                )}
-                            >
-                                <div className="space-y-3">
-                                    {/* ID & Title */}
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] font-medium text-neutral-40 uppercase tracking-wider">
-                                            {item.identifier}
-                                        </span>
-                                        <p className="text-[13px] text-neutral-10 font-medium leading-tight">
-                                            {item.title}
-                                        </p>
-                                    </div>
-
-                                    {/* Badges Row */}
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        {/* Status */}
-                                        <div className="flex items-center gap-1.5 px-2 py-1 bg-primary-20/50 rounded border border-primary-30 text-[11px] text-neutral-20">
-                                            {stateIcons[column.name.toLowerCase()] ? (
-                                                (() => {
-                                                    const StateIcon = stateIcons[column.name.toLowerCase()].icon;
-                                                    return <StateIcon className={cn("h-3 w-3", stateIcons[column.name.toLowerCase()].color)} />;
-                                                })()
-                                            ) : (
-                                                <Circle className="h-3 w-3 text-neutral-40" />
-                                            )}
-                                            {column.name}
-                                        </div>
-
-                                        {/* Priority */}
-                                        <div className="p-1 bg-primary-20/50 rounded border border-primary-30">
-                                            {priorityIcons[item.priority] && (() => {
-                                                const PriorityIcon = priorityIcons[item.priority].icon;
-                                                return <PriorityIcon className={cn("h-3 w-3", priorityIcons[item.priority].color)} />;
-                                            })()}
-                                        </div>
-
-                                        {/* Date */}
-                                        {(item.startDate || item.dueDate) && (
-                                            <div className="flex items-center gap-1.5 px-2 py-1 bg-primary-20/50 rounded border border-primary-30 text-[11px] text-neutral-30">
-                                                <Calendar className="h-3 w-3" />
-                                                <span>
-                                                    {item.startDate ? "Dec 16, 2025" : ""} {item.dueDate ? "- Jan 09, 2026" : ""}
-                                                </span>
-                                                <button className="ml-1 hover:text-neutral-10">×</button>
-                                            </div>
-                                        )}
-
-                                        {/* Group Icon (Mock for Team/Circle) */}
-                                        <div className="p-1 bg-primary-20/50 rounded border border-primary-30">
-                                            <HistoryIcon className="h-3 w-3 text-neutral-40" />
-                                        </div>
-
-                                        {/* Calendar Icon */}
-                                        <div className="p-1 bg-primary-20/50 rounded border border-primary-30">
-                                            <Calendar className="h-3 w-3 text-neutral-40" />
-                                        </div>
-                                    </div>
-
-                                    {/* Footer Icons & Assignee */}
-                                    <div className="flex items-center justify-between pt-1">
-                                        <div className="flex items-center gap-2">
-                                            <div className="p-1 text-neutral-40 hover:text-neutral-20 transition-colors">
-                                                <Paperclip className="h-3.5 w-3.5" />
-                                            </div>
-                                            {item.labels && item.labels.length > 0 && (
-                                                <div className="flex items-center gap-1 py-0.5 px-1.5 bg-primary-20/50 rounded border border-primary-30 text-[11px] text-neutral-30">
-                                                    <Circle className="h-2 w-2 fill-current" style={{ color: item.labels[0].color }} />
-                                                    {item.labels[0].name}
-                                                </div>
-                                            )}
-                                            <div className="p-1 text-neutral-40 hover:text-neutral-20 transition-colors">
-                                                <Plus className="h-3.5 w-3.5" />
-                                            </div>
-                                        </div>
-
-                                        {item.assignees && item.assignees.length > 0 && (
-                                            <Avatar className="h-5 w-5 border border-primary-30">
-                                                <AvatarImage src={item.assignees[0].avatar} />
-                                                <AvatarFallback className="text-[10px] bg-primary-30">
-                                                    {item.assignees[0].name.charAt(0)}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
+                            />
                         ))}
 
                         {/* New Item Button in Column */}

@@ -9,7 +9,13 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Editor } from "@/components/editor/editor";
+import dynamic from "next/dynamic";
+
+const Editor = dynamic(() => import("@/components/editor/editor").then(mod => mod.Editor), {
+    ssr: false,
+    loading: () => <div className="h-[150px] w-full bg-primary-20 animate-pulse rounded-lg" />
+});
+
 import { Badge } from "@/components/ui/badge";
 import {
     DropdownMenu,

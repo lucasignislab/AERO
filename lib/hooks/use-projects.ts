@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 
 export interface Project {
@@ -30,211 +30,120 @@ interface UseProjectsReturn {
     projects: Project[];
     isLoading: boolean;
     error: Error | null;
-    refetch: () => Promise<void>;
+    refetch: () => Promise<unknown>;
     createProject: (data: Partial<Project>) => Promise<Project>;
     updateProject: (id: string, data: Partial<Project>) => Promise<void>;
     deleteProject: (id: string) => Promise<void>;
 }
 
 export function useProjects(workspaceId: string | null): UseProjectsReturn {
-    const [projects, setProjects] = useState<Project[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<Error | null>(null);
+    const queryClient = useQueryClient();
+    const supabase = createClient();
 
-    const fetchProjects = useCallback(async () => {
-        if (!workspaceId) {
-            setIsLoading(false);
-            return;
-        }
-
-        const supabase = createClient();
-        setIsLoading(true);
-
-        try {
-            const { data, error: fetchError } = await supabase
+    const { data: projects = [], isLoading, error, refetch } = useQuery({
+        queryKey: ["projects", workspaceId],
+        queryFn: async () => {
+            if (!workspaceId) return [];
+            const { data, error } = await supabase
                 .from("projects")
                 .select("*")
                 .eq("workspace_id", workspaceId)
                 .order("created_at", { ascending: false });
 
-            if (fetchError) {
-                // Return mock projects if DB fetch fails
-                setProjects([
-                    {
-                        id: "mock-project-1",
-                        workspace_id: workspaceId,
-                        name: "AERO Frontend",
-                        identifier: "AERO",
-                        description: "Modern project management UI",
-                        icon: "🚀",
-                        color: "#3b82f6",
-                        cover_image: null,
-                        lead_id: null,
-                        is_private: false,
-                        is_favorite: true,
-                        features: { cycles: true, modules: true, views: true, pages: true },
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString(),
-                    },
-                    {
-                        id: "mock-project-2",
-                        workspace_id: workspaceId,
-                        name: "AERO Backend",
-                        identifier: "BE",
-                        description: "Scalable backend services",
-                        icon: "⚙️",
-                        color: "#ef4444",
-                        cover_image: null,
-                        lead_id: null,
-                        is_private: false,
-                        is_favorite: false,
-                        features: { cycles: true, modules: true, views: true, pages: true },
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString(),
-                    }
-                ]);
-                return;
-            }
-            setProjects(data || []);
-        } catch (err) {
-            // Fallback for preview
-            setProjects([
-                {
-                    id: "mock-project-1",
+            if (error) throw error;
+            return data as Project[];
+        },
+        enabled: !!workspaceId,
+    });
+
+    const createMutation = useMutation({
+        mutationFn: async (data: Partial<Project>) => {
+            if (!workspaceId) throw new Error("No workspace");
+            const { data: { user } } = await supabase.auth.getUser();
+
+            const { data: project, error } = await supabase
+                .from("projects")
+                .insert({
                     workspace_id: workspaceId,
-                    name: "AERO Frontend",
-                    identifier: "AERO",
-                    description: "Modern project management UI",
-                    icon: "🚀",
-                    color: "#3b82f6",
-                    cover_image: null,
-                    lead_id: null,
-                    is_private: false,
-                    is_favorite: true,
-                    features: { cycles: true, modules: true, views: true, pages: true },
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                }
-            ]);
-            setError(err as Error);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [workspaceId]);
+                    name: data.name || "Novo Projeto",
+                    identifier: data.identifier || `PRJ${Date.now().toString().slice(-4)}`,
+                    description: data.description,
+                    icon: data.icon,
+                    color: data.color,
+                    is_private: data.is_private ?? false,
+                    features: data.features ?? { cycles: true, modules: true, views: true, pages: true },
+                })
+                .select()
+                .single();
 
-    const createProject = async (data: Partial<Project>): Promise<Project> => {
-        if (!workspaceId) throw new Error("No workspace");
+            if (error) throw error;
 
-        const supabase = createClient();
+            if (user) {
+                await supabase.from("project_members").insert({
+                    project_id: project.id,
+                    user_id: user.id,
+                    role: "admin",
+                });
+            }
 
-        const { data: { user } } = await supabase.auth.getUser();
+            return project;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["projects", workspaceId] });
+        },
+    });
 
-        const { data: project, error } = await supabase
-            .from("projects")
-            .insert({
-                workspace_id: workspaceId,
-                name: data.name || "Novo Projeto",
-                identifier: data.identifier || `PRJ${Date.now().toString().slice(-4)}`,
-                description: data.description,
-                icon: data.icon,
-                color: data.color,
-                is_private: data.is_private ?? false,
-                features: data.features ?? { cycles: true, modules: true, views: true, pages: true },
-            })
-            .select()
-            .single();
+    const updateMutation = useMutation({
+        mutationFn: async ({ id, data }: { id: string; data: Partial<Project> }) => {
+            const { error } = await supabase
+                .from("projects")
+                .update(data)
+                .eq("id", id);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["projects", workspaceId] });
+        },
+    });
 
-        if (error) throw error;
-
-        // Add creator as project admin
-        if (user) {
-            await supabase.from("project_members").insert({
-                project_id: project.id,
-                user_id: user.id,
-                role: "admin",
-            });
-        }
-
-        setProjects((prev) => [project, ...prev]);
-        return project;
-    };
-
-    const updateProject = async (id: string, data: Partial<Project>) => {
-        const supabase = createClient();
-
-        const { error } = await supabase
-            .from("projects")
-            .update(data)
-            .eq("id", id);
-
-        if (error) throw error;
-
-        setProjects((prev) =>
-            prev.map((p) => (p.id === id ? { ...p, ...data } : p))
-        );
-    };
-
-    const deleteProject = async (id: string) => {
-        const supabase = createClient();
-
-        const { error } = await supabase
-            .from("projects")
-            .delete()
-            .eq("id", id);
-
-        if (error) throw error;
-
-        setProjects((prev) => prev.filter((p) => p.id !== id));
-    };
-
-    useEffect(() => {
-        fetchProjects();
-    }, [fetchProjects]);
+    const deleteMutation = useMutation({
+        mutationFn: async (id: string) => {
+            const { error } = await supabase
+                .from("projects")
+                .delete()
+                .eq("id", id);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["projects", workspaceId] });
+        },
+    });
 
     return {
         projects,
         isLoading,
-        error,
-        refetch: fetchProjects,
-        createProject,
-        updateProject,
-        deleteProject,
+        error: error as Error,
+        refetch,
+        createProject: (data) => createMutation.mutateAsync(data),
+        updateProject: (id, data) => updateMutation.mutateAsync({ id, data }),
+        deleteProject: (id) => deleteMutation.mutateAsync(id),
     };
 }
 
-// Hook for single project
 export function useProject(projectId: string | null) {
-    const [project, setProject] = useState<Project | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<Error | null>(null);
-
-    useEffect(() => {
-        if (!projectId) {
-            setIsLoading(false);
-            return;
-        }
-
-        const supabase = createClient();
-
-        async function fetchProject() {
-            try {
-                const { data, error: fetchError } = await supabase
-                    .from("projects")
-                    .select("*")
-                    .eq("id", projectId)
-                    .single();
-
-                if (fetchError) throw fetchError;
-                setProject(data);
-            } catch (err) {
-                setError(err as Error);
-            } finally {
-                setIsLoading(false);
-            }
-        }
-
-        fetchProject();
-    }, [projectId]);
-
-    return { project, isLoading, error };
+    const supabase = createClient();
+    return useQuery({
+        queryKey: ["project", projectId],
+        queryFn: async () => {
+            if (!projectId) return null;
+            const { data, error } = await supabase
+                .from("projects")
+                .select("*")
+                .eq("id", projectId)
+                .single();
+            if (error) throw error;
+            return data as Project;
+        },
+        enabled: !!projectId,
+    });
 }
