@@ -41,6 +41,14 @@ CREATE TABLE IF NOT EXISTS public.workspace_members (
     UNIQUE(workspace_id, user_id)
 );
 
+-- Force column existence check in case the table existed with different layout
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='workspace_members' AND column_name='user_id') THEN
+        ALTER TABLE public.workspace_members ADD COLUMN user_id UUID REFERENCES public.profiles(id);
+    END IF;
+END $$;
+
 -- 4. Projects
 CREATE TABLE IF NOT EXISTS public.projects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
