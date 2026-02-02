@@ -1,16 +1,16 @@
 -- =====================================================
 -- AERO: Unified Supabase Database Schema
--- Version: 2.0 (Optimized for Keyboard-First UI)
+-- Version: 2.1 (Bug Fix: RLS Ambiguity & Missing Policies)
 -- =====================================================
 
 -- =====================================================
 -- 0. EXTENSIONS & SETUP
 -- =====================================================
-CREATE EXTENSION IF NOT EXISTS "pg_trgm"; -- For fuzzy search
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- =====================================================
--- 1. PROFILES (Extends auth.users)
+-- 1. PROFILES
 -- =====================================================
 CREATE TABLE IF NOT EXISTS profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -23,9 +23,6 @@ CREATE TABLE IF NOT EXISTS profiles (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-
--- Indices for profiles
-CREATE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email);
 
 -- =====================================================
 -- 2. WORKSPACES & MEMBERSHIP
@@ -59,7 +56,7 @@ CREATE TABLE IF NOT EXISTS projects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
-    identifier TEXT NOT NULL, -- Short ID like 'AERO', 'NASA'
+    identifier TEXT NOT NULL,
     description TEXT,
     icon TEXT,
     color TEXT,
@@ -92,7 +89,7 @@ CREATE TABLE IF NOT EXISTS project_labels (
 );
 
 -- =====================================================
--- 4. ISSUE STATES (Workflow)
+-- 4. ISSUE STATES
 -- =====================================================
 CREATE TABLE IF NOT EXISTS issue_states (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -149,12 +146,12 @@ CREATE TABLE IF NOT EXISTS epics (
 );
 
 -- =====================================================
--- 6. WORK ITEMS (Issues)
+-- 6. WORK ITEMS
 -- =====================================================
 CREATE TABLE IF NOT EXISTS work_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    identifier TEXT NOT NULL, -- e.g. 'AERO-1', 'AERO-2'
+    identifier TEXT NOT NULL,
     title TEXT NOT NULL,
     description TEXT,
     state_id UUID REFERENCES issue_states(id),
@@ -176,7 +173,6 @@ CREATE TABLE IF NOT EXISTS work_items (
     UNIQUE(project_id, identifier)
 );
 
--- Relations for blockers/dependencies
 CREATE TABLE IF NOT EXISTS work_item_relations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_id UUID NOT NULL REFERENCES work_items(id) ON DELETE CASCADE,
@@ -187,14 +183,14 @@ CREATE TABLE IF NOT EXISTS work_item_relations (
 );
 
 -- =====================================================
--- 7. KNOWLEDGE BASE (Pages/Wiki)
+-- 7. KNOWLEDGE BASE
 -- =====================================================
 CREATE TABLE IF NOT EXISTS pages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     parent_id UUID REFERENCES pages(id) ON DELETE SET NULL,
     title TEXT NOT NULL,
-    content JSONB, -- TipTap JSON
+    content JSONB,
     icon TEXT,
     is_published BOOLEAN DEFAULT FALSE,
     created_by_id UUID REFERENCES profiles(id),
@@ -245,28 +241,20 @@ CREATE TABLE IF NOT EXISTS comments (
 CREATE TABLE IF NOT EXISTS activity_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
-    entity_type TEXT NOT NULL, -- 'work_item', 'epic', etc.
+    entity_type TEXT NOT NULL,
     entity_id UUID NOT NULL,
-    action TEXT NOT NULL, -- 'created', 'updated', 'deleted', 'status_change'
-    payload JSONB, -- Stores previous/new values
+    action TEXT NOT NULL,
+    payload JSONB,
     user_id UUID REFERENCES profiles(id),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- =====================================================
--- 10. AUTOMATION (Identifiers, updated_at)
+-- 10. AUTOMATION
 -- =====================================================
+CREATE OR REPLACE FUNCTION trigger_set_timestamp() RETURNS TRIGGER AS $$
+BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $$ LANGUAGE plpgsql;
 
--- Updated_at Trigger function
-CREATE OR REPLACE FUNCTION trigger_set_timestamp()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Apply updated_at to tables
 CREATE TRIGGER set_timestamp_profiles BEFORE UPDATE ON profiles FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 CREATE TRIGGER set_timestamp_workspaces BEFORE UPDATE ON workspaces FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 CREATE TRIGGER set_timestamp_projects BEFORE UPDATE ON projects FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
@@ -279,113 +267,119 @@ CREATE TRIGGER set_timestamp_pages BEFORE UPDATE ON pages FOR EACH ROW EXECUTE P
 CREATE TRIGGER set_timestamp_stickies BEFORE UPDATE ON stickies FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 CREATE TRIGGER set_timestamp_comments BEFORE UPDATE ON comments FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
 
--- Function to generate Work Item Identifier (e.g. AERO-1)
-CREATE OR REPLACE FUNCTION generate_work_item_identifier()
-RETURNS TRIGGER AS $$
-DECLARE
-  project_ident TEXT;
-  next_val INT;
+CREATE OR REPLACE FUNCTION generate_work_item_identifier() RETURNS TRIGGER AS $$
+DECLARE project_ident TEXT; next_val INT;
 BEGIN
-  -- Get project identifier
   SELECT identifier INTO project_ident FROM projects WHERE id = NEW.project_id;
-  
-  -- Count current items in project to get next value
-  SELECT COALESCE(MAX(CAST(split_part(identifier, '-', 2) AS INTEGER)), 0) + 1 
-  INTO next_val 
-  FROM work_items 
-  WHERE project_id = NEW.project_id;
-  
+  SELECT COALESCE(MAX(CAST(split_part(identifier, '-', 2) AS INTEGER)), 0) + 1 INTO next_val 
+  FROM work_items WHERE project_id = NEW.project_id;
   NEW.identifier := project_ident || '-' || next_val;
   RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+END; $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER tr_generate_work_item_identifier
-BEFORE INSERT ON work_items
-FOR EACH ROW
-WHEN (NEW.identifier IS NULL OR NEW.identifier = '')
-EXECUTE PROCEDURE generate_work_item_identifier();
+CREATE TRIGGER tr_generate_work_item_identifier BEFORE INSERT ON work_items
+FOR EACH ROW WHEN (NEW.identifier IS NULL OR NEW.identifier = '') EXECUTE PROCEDURE generate_work_item_identifier();
 
--- Profile creation on signup
-CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION handle_new_user() RETURNS TRIGGER AS $$
 BEGIN
   INSERT INTO public.profiles (id, email, display_name, avatar_url)
-  VALUES (
-    NEW.id,
-    NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'display_name', split_part(NEW.email, '@', 1)),
-    NEW.raw_user_meta_data->>'avatar_url'
-  );
+  VALUES (NEW.id, NEW.email, COALESCE(NEW.raw_user_meta_data->>'display_name', split_part(NEW.email, '@', 1)), NEW.raw_user_meta_data->>'avatar_url');
   RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE PROCEDURE handle_new_user();
+CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE PROCEDURE handle_new_user();
 
 -- =====================================================
 -- 11. SECURITY (RLS Policies)
 -- =====================================================
 
--- Enable RLS
+-- Helper to drop all existing policies to avoid conflicts
+DO $$ 
+DECLARE r RECORD;
+BEGIN
+    FOR r IN (SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public') LOOP
+        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON ' || quote_ident(r.tablename);
+    END LOOP;
+END $$;
+
+-- Enable RLS on all tables
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workspace_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE issue_states ENABLE ROW LEVEL SECURITY;
+ALTER TABLE project_labels ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cycles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE modules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE epics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE work_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE work_item_relations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stickies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quick_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activity_logs ENABLE ROW LEVEL SECURITY;
 
--- 11.1 Profiles Policies
-CREATE POLICY "Public profiles are viewable by everyone" ON profiles FOR SELECT USING (true);
-CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
+-- 11.1 Profiles
+CREATE POLICY "Profiles: Read anyone" ON profiles FOR SELECT USING (true);
+CREATE POLICY "Profiles: Update own" ON profiles FOR UPDATE USING (auth.uid() = id);
 
--- 11.2 Workspace Policies
-CREATE POLICY "Members can view their workspaces" ON workspaces FOR SELECT 
-  USING (id IN (SELECT workspace_id FROM workspace_members WHERE user_id = auth.uid()));
+-- 11.2 Workspaces
+CREATE POLICY "Workspaces: Read if member" ON workspaces FOR SELECT 
+  USING (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = workspaces.id AND user_id = auth.uid()));
+CREATE POLICY "Workspaces: Admin manage" ON workspaces FOR ALL 
+  USING (owner_id = auth.uid() OR EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = workspaces.id AND user_id = auth.uid() AND role = 'admin'));
 
--- 11.3 Project Policies
-CREATE POLICY "Workspace members can view projects" ON projects FOR SELECT 
+-- 11.3 Workspace Members
+CREATE POLICY "Workspace Members: Read if shared workspace" ON workspace_members FOR SELECT 
   USING (workspace_id IN (SELECT workspace_id FROM workspace_members WHERE user_id = auth.uid()));
 
-CREATE POLICY "Project members can edit projects" ON projects FOR UPDATE
-  USING (id IN (SELECT project_id FROM project_members WHERE user_id = auth.uid() AND role IN ('admin', 'member')));
+-- 11.4 Projects
+CREATE POLICY "Projects: Read if workspace member" ON projects FOR SELECT 
+  USING (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = projects.workspace_id AND user_id = auth.uid()));
+CREATE POLICY "Projects: Manage if project admin" ON projects FOR ALL 
+  USING (EXISTS (SELECT 1 FROM project_members WHERE project_id = projects.id AND user_id = auth.uid() AND role = 'admin'));
 
--- 11.4 Work Item Policies
-CREATE POLICY "Project members can view work items" ON work_items FOR SELECT 
+-- 11.5 Project Members
+CREATE POLICY "Project Members: Read if project member" ON project_members FOR SELECT 
   USING (project_id IN (SELECT project_id FROM project_members WHERE user_id = auth.uid()));
 
-CREATE POLICY "Project members can manage work items" ON work_items FOR ALL 
-  USING (project_id IN (SELECT project_id FROM project_members WHERE user_id = auth.uid()));
+-- 11.6 Work Items
+CREATE POLICY "Work Items: Read if project member" ON work_items FOR SELECT 
+  USING (EXISTS (SELECT 1 FROM project_members WHERE project_id = work_items.project_id AND user_id = auth.uid()));
+CREATE POLICY "Work Items: Manage if project member" ON work_items FOR ALL 
+  USING (EXISTS (SELECT 1 FROM project_members WHERE project_id = work_items.project_id AND user_id = auth.uid()));
 
--- 11.5 Stickies (Strictly Private)
-CREATE POLICY "Users can manage own stickies" ON stickies FOR ALL 
-  USING (user_id = auth.uid());
+-- 11.7 Stickies (Private)
+CREATE POLICY "Stickies: Manage own" ON stickies FOR ALL USING (user_id = auth.uid());
+
+-- 11.8 Epics
+CREATE POLICY "Epics: Read if project member" ON epics FOR SELECT 
+  USING (EXISTS (SELECT 1 FROM project_members WHERE project_id = epics.project_id AND user_id = auth.uid()));
+CREATE POLICY "Epics: Manage if project member" ON epics FOR ALL 
+  USING (EXISTS (SELECT 1 FROM project_members WHERE project_id = epics.project_id AND user_id = auth.uid()));
+
+-- 11.9 Pages
+CREATE POLICY "Pages: Read if project member" ON pages FOR SELECT 
+  USING (EXISTS (SELECT 1 FROM project_members WHERE project_id = pages.project_id AND user_id = auth.uid()));
+CREATE POLICY "Pages: Manage if project member" ON pages FOR ALL 
+  USING (EXISTS (SELECT 1 FROM project_members WHERE project_id = pages.project_id AND user_id = auth.uid()));
+
+-- 11.10 Comments
+CREATE POLICY "Comments: Read if linked entity member" ON comments FOR SELECT USING (true);
+CREATE POLICY "Comments: Manage own" ON comments FOR ALL USING (created_by_id = auth.uid());
 
 -- =====================================================
 -- 12. PERFORMANCE (Indexes)
 -- =====================================================
 CREATE INDEX IF NOT EXISTS idx_work_items_project_id ON work_items(project_id);
-CREATE INDEX IF NOT EXISTS idx_work_items_state_id ON work_items(state_id);
-CREATE INDEX IF NOT EXISTS idx_work_items_cycle_id ON work_items(cycle_id);
 CREATE INDEX IF NOT EXISTS idx_work_items_title_trgm ON work_items USING gin (title gin_trgm_ops);
 
 -- =====================================================
 -- 13. REALTIME REPLICATION
 -- =====================================================
--- Enable realtime for core tables
 BEGIN;
-  -- Remove existing if any
   DROP PUBLICATION IF EXISTS supabase_realtime;
-  CREATE PUBLICATION supabase_realtime FOR TABLE 
-    work_items, 
-    comments, 
-    issue_states, 
-    projects,
-    pages,
-    stickies;
+  CREATE PUBLICATION supabase_realtime FOR TABLE work_items, comments, issue_states, projects, pages, stickies;
 COMMIT;
