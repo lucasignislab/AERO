@@ -1,6 +1,6 @@
 -- =====================================================
 -- AERO: Unified Supabase Database Schema
--- Version: 2.1 (Bug Fix: RLS Ambiguity & Missing Policies)
+-- Version: 2.2 (Bug Fix: Explicit RLS Aliasing)
 -- =====================================================
 
 -- =====================================================
@@ -293,7 +293,7 @@ CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXEC
 -- 11. SECURITY (RLS Policies)
 -- =====================================================
 
--- Helper to drop all existing policies to avoid conflicts
+-- Clean up existing policies
 DO $$ 
 DECLARE r RECORD;
 BEGIN
@@ -322,53 +322,53 @@ ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE activity_logs ENABLE ROW LEVEL SECURITY;
 
 -- 11.1 Profiles
-CREATE POLICY "Profiles: Read anyone" ON profiles FOR SELECT USING (true);
-CREATE POLICY "Profiles: Update own" ON profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "profiles_select_public" ON profiles FOR SELECT USING (true);
+CREATE POLICY "profiles_update_own" ON profiles FOR UPDATE USING (auth.uid() = id);
 
--- 11.2 Workspaces
-CREATE POLICY "Workspaces: Read if member" ON workspaces FOR SELECT 
-  USING (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = workspaces.id AND user_id = auth.uid()));
-CREATE POLICY "Workspaces: Admin manage" ON workspaces FOR ALL 
-  USING (owner_id = auth.uid() OR EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = workspaces.id AND user_id = auth.uid() AND role = 'admin'));
+-- 11.2 Workspaces (EXPLICIT ALIAS wm TO AVOID user_id AMBIGUITY)
+CREATE POLICY "workspaces_select_member" ON workspaces FOR SELECT 
+  USING (EXISTS (SELECT 1 FROM workspace_members wm WHERE wm.workspace_id = workspaces.id AND wm.user_id = auth.uid()));
+CREATE POLICY "workspaces_all_admin" ON workspaces FOR ALL 
+  USING (workspaces.owner_id = auth.uid() OR EXISTS (SELECT 1 FROM workspace_members wm WHERE wm.workspace_id = workspaces.id AND wm.user_id = auth.uid() AND wm.role = 'admin'));
 
 -- 11.3 Workspace Members
-CREATE POLICY "Workspace Members: Read if shared workspace" ON workspace_members FOR SELECT 
-  USING (workspace_id IN (SELECT workspace_id FROM workspace_members WHERE user_id = auth.uid()));
+CREATE POLICY "workspace_members_select_member" ON workspace_members FOR SELECT 
+  USING (workspace_id IN (SELECT wm.workspace_id FROM workspace_members wm WHERE wm.user_id = auth.uid()));
 
 -- 11.4 Projects
-CREATE POLICY "Projects: Read if workspace member" ON projects FOR SELECT 
-  USING (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = projects.workspace_id AND user_id = auth.uid()));
-CREATE POLICY "Projects: Manage if project admin" ON projects FOR ALL 
-  USING (EXISTS (SELECT 1 FROM project_members WHERE project_id = projects.id AND user_id = auth.uid() AND role = 'admin'));
+CREATE POLICY "projects_select_member" ON projects FOR SELECT 
+  USING (EXISTS (SELECT 1 FROM workspace_members wm WHERE wm.workspace_id = projects.workspace_id AND wm.user_id = auth.uid()));
+CREATE POLICY "projects_all_admin" ON projects FOR ALL 
+  USING (EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = projects.id AND pm.user_id = auth.uid() AND pm.role = 'admin'));
 
 -- 11.5 Project Members
-CREATE POLICY "Project Members: Read if project member" ON project_members FOR SELECT 
-  USING (project_id IN (SELECT project_id FROM project_members WHERE user_id = auth.uid()));
+CREATE POLICY "project_members_select_member" ON project_members FOR SELECT 
+  USING (project_id IN (SELECT pm.project_id FROM project_members pm WHERE pm.user_id = auth.uid()));
 
 -- 11.6 Work Items
-CREATE POLICY "Work Items: Read if project member" ON work_items FOR SELECT 
-  USING (EXISTS (SELECT 1 FROM project_members WHERE project_id = work_items.project_id AND user_id = auth.uid()));
-CREATE POLICY "Work Items: Manage if project member" ON work_items FOR ALL 
-  USING (EXISTS (SELECT 1 FROM project_members WHERE project_id = work_items.project_id AND user_id = auth.uid()));
+CREATE POLICY "work_items_select_member" ON work_items FOR SELECT 
+  USING (EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = work_items.project_id AND pm.user_id = auth.uid()));
+CREATE POLICY "work_items_all_member" ON work_items FOR ALL 
+  USING (EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = work_items.project_id AND pm.user_id = auth.uid()));
 
 -- 11.7 Stickies (Private)
-CREATE POLICY "Stickies: Manage own" ON stickies FOR ALL USING (user_id = auth.uid());
+CREATE POLICY "stickies_all_own" ON stickies FOR ALL USING (stickies.user_id = auth.uid());
 
 -- 11.8 Epics
-CREATE POLICY "Epics: Read if project member" ON epics FOR SELECT 
-  USING (EXISTS (SELECT 1 FROM project_members WHERE project_id = epics.project_id AND user_id = auth.uid()));
-CREATE POLICY "Epics: Manage if project member" ON epics FOR ALL 
-  USING (EXISTS (SELECT 1 FROM project_members WHERE project_id = epics.project_id AND user_id = auth.uid()));
-
--- 11.9 Pages
-CREATE POLICY "Pages: Read if project member" ON pages FOR SELECT 
-  USING (EXISTS (SELECT 1 FROM project_members WHERE project_id = pages.project_id AND user_id = auth.uid()));
-CREATE POLICY "Pages: Manage if project member" ON pages FOR ALL 
-  USING (EXISTS (SELECT 1 FROM project_members WHERE project_id = pages.project_id AND user_id = auth.uid()));
+CREATE POLICY "epics_select_member" ON epics FOR SELECT 
+  USING (EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = epics.project_id AND pm.user_id = auth.uid()));
+CREATE POLICY "epics_all_member" ON epics FOR ALL 
+  USING (EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = epics.project_id AND pm.user_id = auth.uid()));
 
 -- 11.10 Comments
-CREATE POLICY "Comments: Read if linked entity member" ON comments FOR SELECT USING (true);
-CREATE POLICY "Comments: Manage own" ON comments FOR ALL USING (created_by_id = auth.uid());
+CREATE POLICY "comments_select_public" ON comments FOR SELECT USING (true);
+CREATE POLICY "comments_all_own" ON comments FOR ALL USING (created_by_id = auth.uid());
+
+-- 11.11 Issue States & Labels
+CREATE POLICY "issue_states_select_member" ON issue_states FOR SELECT 
+  USING (EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = issue_states.project_id AND pm.user_id = auth.uid()));
+CREATE POLICY "project_labels_select_member" ON project_labels FOR SELECT 
+  USING (EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = project_labels.project_id AND pm.user_id = auth.uid()));
 
 -- =====================================================
 -- 12. PERFORMANCE (Indexes)
