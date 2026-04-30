@@ -77,7 +77,9 @@ export function CommandPalette() {
                 <div className="flex flex-col h-[500px]">
                     <div className="flex items-center px-4 py-3 border-b border-primary-30 bg-primary-20">
                         <Search className="w-5 h-5 mr-3 text-neutral-30" />
+                        <label htmlFor="command-search" className="sr-only">Pesquisar comandos</label>
                         <input
+                            id="command-search"
                             autoFocus
                             className="flex-1 bg-transparent border-none outline-none text-neutral placeholder-neutral-30 text-[15px]"
                             placeholder="Digite um comando ou pesquise"

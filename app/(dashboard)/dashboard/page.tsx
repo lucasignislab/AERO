@@ -2,7 +2,7 @@ export default function DashboardPage() {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-3xl font-bold text-neutral">Dashboard</h1>
+                <h1 className="text-neutral" style={{ fontSize: "var(--font-size-h1)", lineHeight: "var(--line-height-heading)", fontWeight: 700 }}>Dashboard</h1>
                 <p className="text-neutral-30 mt-1">
                     Bem-vindo ao AERO. Planeje na velocidade do pensamento.
                 </p>

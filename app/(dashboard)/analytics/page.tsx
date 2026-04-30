@@ -30,7 +30,7 @@ const stateData = [
     { label: "Backlog", value: 42, color: "#6b7280" },
     { label: "A Fazer", value: 28, color: "#3b82f6" },
     { label: "Em Progresso", value: 24, color: "#eab308" },
-    { label: "Revisão", value: 8, color: "#8b5cf6" },
+    { label: "Revisão", value: 8, color: "#14b8a6" },
     { label: "Concluído", value: 54, color: "#22c55e" },
 ];
 

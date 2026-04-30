@@ -101,7 +101,9 @@ export function WorkItemModal({
 
                 <div className="space-y-4">
                     {/* Title */}
+                    <label htmlFor="work-item-title" className="sr-only">Título da tarefa</label>
                     <Input
+                        id="work-item-title"
                         placeholder="Título da tarefa"
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}

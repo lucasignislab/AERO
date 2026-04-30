@@ -13,14 +13,14 @@ interface Label {
 
 const colorOptions = [
     "#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6",
-    "#3b82f6", "#6366f1", "#8b5cf6", "#ec4899", "#6b7280",
+    "#3b82f6", "#0d9488", "#14b8a6", "#ec4899", "#6b7280",
 ];
 
 const defaultLabels: Label[] = [
     { id: "1", name: "Bug", color: "#ef4444" },
     { id: "2", name: "Feature", color: "#22c55e" },
     { id: "3", name: "Melhoria", color: "#3b82f6" },
-    { id: "4", name: "Documentação", color: "#8b5cf6" },
+    { id: "4", name: "Documentação", color: "#14b8a6" },
     { id: "5", name: "Urgente", color: "#f97316" },
 ];
 
@@ -56,7 +56,9 @@ export default function LabelsPage() {
                 <h2 className="text-sm font-medium text-neutral mb-3">Adicionar Etiqueta</h2>
                 <div className="space-y-3">
                     <div className="flex gap-2">
+                        <label htmlFor="new-label-name" className="sr-only">Nome da etiqueta</label>
                         <Input
+                            id="new-label-name"
                             value={newLabelName}
                             onChange={(e) => setNewLabelName(e.target.value)}
                             placeholder="Nome da etiqueta"

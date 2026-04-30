@@ -34,6 +34,8 @@ import {
     FileStack,
     SlidersHorizontal,
     Copy,
+    PanelLeftClose,
+    PanelLeft,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -50,6 +52,8 @@ interface SidebarProps {
         icon?: string;
         color?: string;
     }>;
+    collapsed?: boolean;
+    onToggleCollapse?: () => void;
 }
 
 const mainNavItems = [
@@ -74,7 +78,13 @@ const projectSubItems = [
     { href: "pages", label: "Páginas", icon: FileStack },
 ];
 
-export function Sidebar({ user, workspaceName = "Projects", projects = [] }: SidebarProps) {
+export function Sidebar({
+    user,
+    workspaceName = "Projects",
+    projects = [],
+    collapsed = false,
+    onToggleCollapse,
+}: SidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
     const supabase = createClient();
@@ -105,25 +115,39 @@ export function Sidebar({ user, workspaceName = "Projects", projects = [] }: Sid
         .toUpperCase() || user?.email?.[0].toUpperCase() || "U";
 
     return (
-        <aside className="w-64 h-screen bg-primary-10 border-r border-primary-30 flex flex-col">
+        <aside
+            className={cn(
+                "h-screen bg-primary-10 border-r border-primary-30 flex flex-col transition-all duration-200",
+                collapsed ? "w-16" : "w-64"
+            )}
+        >
             {/* Header */}
-            <div className="p-4 flex items-center justify-between">
-                <span className="font-semibold text-neutral">{workspaceName}</span>
-                <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7">
-                        <SlidersHorizontal className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7">
-                        <Copy className="h-4 w-4" />
-                    </Button>
-                </div>
+            <div className={cn("p-4 flex items-center", collapsed ? "justify-center" : "justify-between")}>
+                {!collapsed && (
+                    <span className="font-semibold text-neutral">{workspaceName}</span>
+                )}
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    onClick={onToggleCollapse}
+                    aria-label={collapsed ? "Expandir sidebar" : "Colapsar sidebar"}
+                >
+                    {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+                </Button>
             </div>
 
             {/* New Item Button */}
             <div className="px-3 mb-2">
-                <Button variant="ghost" className="w-full justify-start gap-2 text-neutral-30 h-9">
-                    <Plus className="h-4 w-4" />
-                    Novo item
+                <Button
+                    variant="ghost"
+                    className={cn(
+                        "w-full gap-2 text-neutral-30 h-9",
+                        collapsed ? "justify-center px-0" : "justify-start"
+                    )}
+                >
+                    <Plus className="h-4 w-4 shrink-0" />
+                    {!collapsed && <span>Novo item</span>}
                 </Button>
             </div>
 
@@ -137,125 +161,162 @@ export function Sidebar({ user, workspaceName = "Projects", projects = [] }: Sid
                             href={item.href}
                             className={cn(
                                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                                collapsed && "justify-center px-0",
                                 pathname === item.href
                                     ? "bg-primary-20 text-neutral"
                                     : "text-neutral-30 hover:bg-primary-20 hover:text-neutral"
                             )}
+                            title={collapsed ? item.label : undefined}
                         >
-                            <item.icon className="h-4 w-4" />
-                            {item.label}
+                            <item.icon className="h-4 w-4 shrink-0" />
+                            {!collapsed && item.label}
                         </Link>
                     ))}
                 </div>
 
                 {/* Workspace */}
-                <div className="mt-6">
-                    <span className="px-3 text-xs font-medium text-neutral-40 uppercase tracking-wider">
-                        Espaço de trabalho
-                    </span>
-                    <div className="mt-2 space-y-0.5">
-                        {workspaceItems.map((item) => (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                className={cn(
-                                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                                    pathname === item.href
-                                        ? "bg-primary-20 text-neutral"
-                                        : "text-neutral-30 hover:bg-primary-20 hover:text-neutral"
-                                )}
-                            >
-                                <item.icon className="h-4 w-4" />
-                                {item.label}
-                            </Link>
-                        ))}
+                {!collapsed && (
+                    <div className="mt-6">
+                        <span className="px-3 text-xs font-medium text-neutral-40 uppercase tracking-wider">
+                            Espaço de trabalho
+                        </span>
+                    </div>
+                )}
+                <div className={cn("mt-2 space-y-0.5", !collapsed && "mt-2")}>
+                    {workspaceItems.map((item) => (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className={cn(
+                                "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                                collapsed && "justify-center px-0",
+                                pathname === item.href
+                                    ? "bg-primary-20 text-neutral"
+                                    : "text-neutral-30 hover:bg-primary-20 hover:text-neutral"
+                            )}
+                            title={collapsed ? item.label : undefined}
+                        >
+                            <item.icon className="h-4 w-4 shrink-0" />
+                            {!collapsed && item.label}
+                        </Link>
+                    ))}
+                    {!collapsed && (
                         <button className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-neutral-30 hover:bg-primary-20 hover:text-neutral w-full">
                             <MoreHorizontal className="h-4 w-4" />
                             More
                         </button>
-                    </div>
+                    )}
                 </div>
 
                 {/* Projects */}
-                <div className="mt-6">
-                    <span className="px-3 text-xs font-medium text-neutral-40 uppercase tracking-wider">
-                        Projetos
-                    </span>
-                    <div className="mt-2 space-y-0.5">
-                        {projects.length > 0 ? (
-                            projects.map((project) => (
-                                <div key={project.id}>
-                                    <button
-                                        onClick={() => toggleProject(project.id)}
-                                        className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-neutral-30 hover:bg-primary-20 hover:text-neutral w-full"
+                {!collapsed && (
+                    <div className="mt-6">
+                        <span className="px-3 text-xs font-medium text-neutral-40 uppercase tracking-wider">
+                            Projetos
+                        </span>
+                    </div>
+                )}
+                <div className={cn("mt-2 space-y-0.5")}>
+                    {projects.length > 0 ? (
+                        projects.map((project) => (
+                            <div key={project.id}>
+                                {collapsed ? (
+                                    <Link
+                                        href={`/projects/${project.id}`}
+                                        className="flex items-center justify-center rounded-md px-0 py-2 text-sm text-neutral-30 hover:bg-primary-20 hover:text-neutral"
+                                        title={project.name}
                                     >
-                                        {expandedProjects.has(project.id) ? (
-                                            <ChevronDown className="h-3 w-3" />
-                                        ) : (
-                                            <ChevronRight className="h-3 w-3" />
-                                        )}
                                         <span className="text-lg">{project.icon || "📁"}</span>
-                                        <span className="truncate flex-1 text-left">{project.name}</span>
-                                    </button>
+                                    </Link>
+                                ) : (
+                                    <>
+                                        <button
+                                            onClick={() => toggleProject(project.id)}
+                                            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-neutral-30 hover:bg-primary-20 hover:text-neutral w-full"
+                                        >
+                                            {expandedProjects.has(project.id) ? (
+                                                <ChevronDown className="h-3 w-3" />
+                                            ) : (
+                                                <ChevronRight className="h-3 w-3" />
+                                            )}
+                                            <span className="text-lg">{project.icon || "📁"}</span>
+                                            <span className="truncate flex-1 text-left">{project.name}</span>
+                                        </button>
 
-                                    {expandedProjects.has(project.id) && (
-                                        <div className="ml-6 space-y-0.5">
-                                            {projectSubItems.map((subItem) => (
-                                                <Link
-                                                    key={subItem.href}
-                                                    href={`/projects/${project.id}/${subItem.href === "items" ? "work-items" : subItem.href}`}
-                                                    className={cn(
-                                                        "flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors",
-                                                        pathname.includes(`/projects/${project.id}/${subItem.href}`)
-                                                            ? "bg-primary-20 text-neutral"
-                                                            : "text-neutral-40 hover:bg-primary-20 hover:text-neutral"
-                                                    )}
-                                                >
-                                                    <subItem.icon className="h-3.5 w-3.5" />
-                                                    {subItem.label}
-                                                </Link>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            ))
-                        ) : (
+                                        {expandedProjects.has(project.id) && (
+                                            <div className="ml-6 space-y-0.5">
+                                                {projectSubItems.map((subItem) => (
+                                                    <Link
+                                                        key={subItem.href}
+                                                        href={`/projects/${project.id}/${subItem.href === "items" ? "work-items" : subItem.href}`}
+                                                        className={cn(
+                                                            "flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors",
+                                                            pathname.includes(`/projects/${project.id}/${subItem.href}`)
+                                                                ? "bg-primary-20 text-neutral"
+                                                                : "text-neutral-40 hover:bg-primary-20 hover:text-neutral"
+                                                        )}
+                                                    >
+                                                        <subItem.icon className="h-3.5 w-3.5" />
+                                                        {subItem.label}
+                                                    </Link>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        ))
+                    ) : (
+                        !collapsed && (
                             <div className="px-3 py-2 text-sm text-neutral-40">
                                 Nenhum projeto
                             </div>
-                        )}
-                    </div>
+                        )
+                    )}
                 </div>
             </nav>
 
             {/* User Footer */}
-            <div className="p-3 border-t border-primary-30">
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <button className="flex items-center gap-3 w-full rounded-md px-2 py-2 hover:bg-primary-20 transition-colors">
-                            <Avatar className="h-8 w-8">
-                                <AvatarImage src={user?.avatar_url} />
-                                <AvatarFallback className="text-sm">{initials}</AvatarFallback>
-                            </Avatar>
-                            <span className="flex-1 text-left text-sm text-neutral truncate">
-                                {user?.display_name || user?.email}
-                            </span>
-                        </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-56">
-                        <DropdownMenuItem asChild>
-                            <Link href="/settings">
-                                <Settings className="mr-2 h-4 w-4" />
-                                Configurações
-                            </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={handleLogout} className="text-danger">
-                            <LogOut className="mr-2 h-4 w-4" />
-                            Sair
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+            <div className={cn("p-3 border-t border-primary-30", collapsed && "flex justify-center")}>
+                {collapsed ? (
+                    <button
+                        onClick={onToggleCollapse}
+                        className="flex items-center justify-center"
+                        aria-label="Expandir sidebar"
+                    >
+                        <Avatar className="h-8 w-8">
+                            <AvatarImage src={user?.avatar_url} />
+                            <AvatarFallback className="text-sm">{initials}</AvatarFallback>
+                        </Avatar>
+                    </button>
+                ) : (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button className="flex items-center gap-3 w-full rounded-md px-2 py-2 hover:bg-primary-20 transition-colors">
+                                <Avatar className="h-8 w-8">
+                                    <AvatarImage src={user?.avatar_url} />
+                                    <AvatarFallback className="text-sm">{initials}</AvatarFallback>
+                                </Avatar>
+                                <span className="flex-1 text-left text-sm text-neutral truncate">
+                                    {user?.display_name || user?.email}
+                                </span>
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-56">
+                            <DropdownMenuItem asChild>
+                                <Link href="/settings">
+                                    <Settings className="mr-2 h-4 w-4" />
+                                    Configurações
+                                </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={handleLogout} className="text-danger">
+                                <LogOut className="mr-2 h-4 w-4" />
+                                Sair
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
             </div>
         </aside>
     );

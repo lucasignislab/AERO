@@ -14,11 +14,12 @@ import {
 } from "@/components/ui/dialog";
 import { useProjects, useCurrentUser, useWorkspace } from "@/lib/hooks";
 import { FolderKanban, Plus, Loader2, Globe, Lock } from "lucide-react";
+import { SkeletonCard } from "@/components/ui/skeleton";
 
 const projectColors = [
     "#ef4444", "#f97316", "#f59e0b", "#84cc16",
     "#22c55e", "#14b8a6", "#06b6d4", "#0ea5e9",
-    "#3b82f6", "#6366f1", "#8b5cf6", "#a855f7",
+    "#3b82f6", "#0d9488", "#14b8a6", "#06b6d4",
 ];
 
 const projectIcons = ["📁", "🚀", "💼", "📊", "🎯", "⚡", "🔥", "💡", "🎨", "🔧"];

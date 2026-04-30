@@ -25,7 +25,7 @@ const defaultStates: State[] = [
     { id: "1", name: "Backlog", color: "#6b7280", group: "backlog" },
     { id: "2", name: "A Fazer", color: "#3b82f6", group: "todo" },
     { id: "3", name: "Em Progresso", color: "#eab308", group: "in_progress" },
-    { id: "4", name: "Revisão", color: "#8b5cf6", group: "in_progress" },
+    { id: "4", name: "Revisão", color: "#14b8a6", group: "in_progress" },
     { id: "5", name: "Concluído", color: "#22c55e", group: "done" },
     { id: "6", name: "Cancelado", color: "#ef4444", group: "cancelled" },
 ];
@@ -68,7 +68,9 @@ export default function StatesPage() {
             <div className="bg-primary-20 rounded-lg p-4 mb-6">
                 <h2 className="text-sm font-medium text-neutral mb-3">Adicionar Estado</h2>
                 <div className="flex gap-2">
+                    <label htmlFor="new-state-name" className="sr-only">Nome do estado</label>
                     <Input
+                        id="new-state-name"
                         value={newStateName}
                         onChange={(e) => setNewStateName(e.target.value)}
                         placeholder="Nome do estado"

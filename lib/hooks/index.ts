@@ -8,6 +8,7 @@ export { useModules } from "./use-modules";
 export { usePages } from "./use-pages";
 export { useSavedViews } from "./use-views";
 export { useStickies } from "./use-stickies";
+export { useSidebar } from "./use-sidebar";
 
 // Re-export types
 export type { Project } from "./use-projects";

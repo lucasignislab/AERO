@@ -20,7 +20,7 @@ const colorMap: Record<string, string> = {
     pink: "#fecdd3",
     green: "#bbf7d0",
     blue: "#bfdbfe",
-    purple: "#ddd6fe",
+    purple: "#99f6e4",
     orange: "#fed7aa",
 };
 
@@ -62,8 +62,12 @@ export default function StickiesPage() {
 
     if (isLoading) {
         return (
-            <div className="max-w-4xl mx-auto p-6 flex items-center justify-center h-full">
-                <Loader2 className="h-8 w-8 animate-spin text-neutral-40" />
+            <div className="max-w-4xl mx-auto p-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                        <SkeletonCard key={i} />
+                    ))}
+                </div>
             </div>
         );
     }
@@ -103,7 +107,9 @@ export default function StickiesPage() {
                             <X className="h-4 w-4" />
                         </button>
                     </div>
+                    <label htmlFor="sticky-content" className="sr-only">Conteúdo da sticky</label>
                     <textarea
+                        id="sticky-content"
                         value={newContent}
                         onChange={(e) => setNewContent(e.target.value)}
                         placeholder="Digite sua nota..."
