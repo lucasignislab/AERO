@@ -36,6 +36,7 @@ import {
     Copy,
     PanelLeftClose,
     PanelLeft,
+    Palette,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -68,6 +69,7 @@ const workspaceItems = [
     { href: "/analytics", label: "Análises", icon: BarChart3 },
     { href: "/files", label: "Arquivos", icon: FileText },
     { href: "/dashboards", label: "Dashboards", icon: LayoutDashboard },
+    { href: "/design-system", label: "Design System", icon: Palette },
 ];
 
 const projectSubItems = [
