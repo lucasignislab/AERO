@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { SkeletonCard } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useStickies, useCurrentUser, useWorkspace } from "@/lib/hooks";
 import { Plus, StickyNote, Trash2, X, Loader2 } from "lucide-react";
